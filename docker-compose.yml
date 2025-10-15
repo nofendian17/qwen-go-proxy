@@ -12,7 +12,7 @@ services:
 
     # Port configuration
     ports:
-      - "${SERVER_PORT:-8080}:8080"
+      - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
 
     # User configuration for proper file permissions
     user: "${UID:-1000}:${GID:-1000}"
@@ -30,7 +30,7 @@ services:
 
     # Health check with detailed endpoint
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health/detailed"]
+      test: ["CMD", "curl", "-f", "http://localhost:${SERVER_PORT:-8080}/health/detailed"]
       interval: 30s
       timeout: 15s
       retries: 3
