@@ -134,7 +134,7 @@ func (c *Config) GetServerAddress() string {
 	if c == nil {
 		return ":8080"
 	}
-	return fmt.Sprintf("%s:%s", c.ServerHost, c.ServerPort)
+	return fmt.Sprintf("%s:%d", c.ServerHost, c.ServerPort)
 }
 
 // CompletionRequest represents a completion request with validation
