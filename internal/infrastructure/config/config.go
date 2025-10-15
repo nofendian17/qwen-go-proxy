@@ -51,8 +51,9 @@ func LoadConfig() (*entities.Config, error) {
 
 // validateConfig checks if the configuration is valid
 func validateConfig(c *entities.Config) error {
-	if c.ServerPort == 0 {
-		return fmt.Errorf("SERVER_PORT cannot be empty")
+	// Validate server port is in valid range (1-65535)
+	if c.ServerPort < 1 || c.ServerPort > 65535 {
+		return fmt.Errorf("SERVER_PORT must be a valid port number (1-65535), got: %d", c.ServerPort)
 	}
 
 	if c.QWENOAuthBaseURL == "" {

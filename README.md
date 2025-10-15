@@ -42,7 +42,7 @@ A production-ready HTTP proxy server that provides OpenAI-compatible API endpoin
 2. **Configure environment** (optional):
    Create a `.env` file:
    ```env
-   SERVER_PORT=:8080
+   SERVER_PORT=8080
    SERVER_HOST=0.0.0.0
    LOG_LEVEL=info
    DEBUG_MODE=false
@@ -110,7 +110,7 @@ All configuration is done via environment variables:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `SERVER_HOST` | `0.0.0.0` | Server bind address |
-| `SERVER_PORT` | `:8080` | Server port |
+| `SERVER_PORT` | `8080` | Server port |
 | `LOG_LEVEL` | `info` | Logging level (debug, info, warn, error) |
 | `DEBUG_MODE` | `false` | Enable debug mode |
 | `RATE_LIMIT_RPS` | `10` | Requests per second limit |
