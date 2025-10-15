@@ -1,0 +1,56 @@
+# =================================================================
+# Qwen API Proxy - Docker Compose Configuration
+# =================================================================
+# This configuration provides a production-ready setup for the Qwen API proxy
+# that offers OpenAI-compatible endpoints with OAuth authentication.
+
+services:
+  qwen-api-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    # Port configuration
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+
+    # User configuration for proper file permissions
+    user: "${UID:-1000}:${GID:-1000}"
+
+    # Load environment variables from .env file
+    env_file:
+      - .env
+
+    # Named volume for .qwen credentials (mounted to working directory)
+    volumes:
+      - .qwen:/home/qwen/.qwen
+
+    # Restart policy for production resilience
+    restart: unless-stopped
+
+    # Health check with detailed endpoint
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/detailed"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+      disable: false
+
+    # Resource limits (optional - uncomment for production)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 512M
+    #       cpus: '0.5'
+    #     reservations:
+    #       memory: 256M
+    #       cpus: '0.25'
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
