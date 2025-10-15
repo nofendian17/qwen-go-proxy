@@ -18,7 +18,7 @@ func LoadConfig() (*entities.Config, error) {
 	godotenv.Load()
 
 	config := &entities.Config{
-		ServerPort:                 getEnvWithDefault("SERVER_PORT", ":8080"),
+		ServerPort:                 getEnvIntWithDefault("SERVER_PORT", 8080),
 		ServerHost:                 getEnvWithDefault("SERVER_HOST", "0.0.0.0"),
 		ReadTimeout:                getEnvDurationWithDefault("READ_TIMEOUT", 30*time.Second),
 		WriteTimeout:               getEnvDurationWithDefault("WRITE_TIMEOUT", 30*time.Second),
@@ -51,7 +51,7 @@ func LoadConfig() (*entities.Config, error) {
 
 // validateConfig checks if the configuration is valid
 func validateConfig(c *entities.Config) error {
-	if c.ServerPort == "" {
+	if c.ServerPort == 0 {
 		return fmt.Errorf("SERVER_PORT cannot be empty")
 	}
 

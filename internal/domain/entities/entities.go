@@ -54,7 +54,7 @@ func (c *Credentials) Sanitize() map[string]interface{} {
 // This struct supports JSON unmarshaling for configuration files and environment variables.
 type Config struct {
 	// Server configuration
-	ServerPort   string        `json:"server_port" env:"SERVER_PORT" env-default:":8080"`
+	ServerPort   int           `json:"server_port" env:"SERVER_PORT" env-default:"8080"`
 	ServerHost   string        `json:"server_host" env:"SERVER_HOST" env-default:"0.0.0.0"`
 	ReadTimeout  time.Duration `json:"read_timeout" env:"READ_TIMEOUT" env-default:"30s"`
 	WriteTimeout time.Duration `json:"write_timeout" env:"WRITE_TIMEOUT" env-default:"30s"`
@@ -134,7 +134,7 @@ func (c *Config) GetServerAddress() string {
 	if c == nil {
 		return ":8080"
 	}
-	return c.ServerHost + c.ServerPort
+	return fmt.Sprintf("%s:%s", c.ServerHost, c.ServerPort)
 }
 
 // CompletionRequest represents a completion request with validation
