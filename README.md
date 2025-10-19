@@ -1,31 +1,38 @@
 # Qwen Go Proxy
 
-A production-ready HTTP proxy server that provides OpenAI-compatible API endpoints for Alibaba's Qwen AI models, written in Go. This proxy enables seamless integration with applications expecting OpenAI API format while using Qwen's authentication and AI capabilities.
+A production-ready HTTP proxy server that provides OpenAI-compatible API endpoints for Alibaba's Qwen AI models, written
+in Go. This proxy enables seamless integration with applications expecting OpenAI API format while using Qwen's
+authentication and AI capabilities.
 
 ## Features
 
 - 🏗️ **OpenAI-Compatible Endpoints**: `/v1/chat/completions`, `/v1/completions`, `/v1/models`
 - 🔐 **OAuth2 Authentication**: Automatic device flow authentication with Qwen
 - ⚡ **High Performance**: Built with Gin framework for low latency
-- 🛡️ **Security Features**: Rate limiting, CORS support, security headers
-- 📊 **Monitoring**: Health checks, detailed system metrics, structured logging
+- 🛡️ **Security Features**: Advanced rate limiting with concurrent safety, TLS support, CORS, security headers
+- 📊 **Monitoring**: Health checks, detailed system metrics, structured logging with request tracing
+- 🔍 **Request Tracing**: Unique request ID tracking for debugging and log correlation
+- 🚨 **Structured Error Handling**: Categorized error types with detailed context and logging
 - 🐳 **Docker Support**: Containerized deployment with Docker Compose
 - 🔄 **Token Management**: Automatic refresh of OAuth tokens
-- 🎛️ **Configurable**: Environment-based configuration with sensible defaults
+- 🎛️ **Configurable**: Environment-based configuration with sensible defaults and validation
 
 ## Requirements
 
 ### System Requirements
+
 - **Go**: 1.24.8 or later (for building from source)
 - **Docker**: Latest version (for containerized deployment)
 - **Operating System**: Linux, macOS, or Windows with WSL2
 
 ### External Requirements
+
 - **Qwen Account**: Active account with Alibaba Cloud Qwen
 - **Network Access**: Outbound HTTPS access to `chat.qwen.ai` and `portal.qwen.ai`
 - **Storage**: Write access for credential storage (default: `.qwen` directory)
 
 ### Optional Dependencies
+
 - **git**: For version control (recommended)
 - **make**: For using Makefile commands (if provided)
 
@@ -91,14 +98,23 @@ On first startup, the proxy will automatically initiate OAuth2 device authentica
 ### API Endpoints
 
 #### Health Checks
+
 - `GET /` - Basic server status
 - `GET /health` - OpenAI-compatible health check
-- `GET /health/detailed` - Comprehensive health status with metrics
+- `GET /health/detailed` - Comprehensive health status with metrics, authentication status, and request ID
+
+#### Response Headers
+
+All API responses include:
+- `X-Request-ID`: Unique request identifier for tracing and debugging
+- Rate limiting headers (when applicable)
 
 #### Authentication
+
 - `GET /auth` - Initiate OAuth2 authentication flow
 
 #### OpenAI-Compatible APIs
+
 - `GET /v1/models` - List available models
 - `POST /v1/chat/completions` - Chat completions (streaming supported)
 - `POST /v1/completions` - Text completions
@@ -107,27 +123,70 @@ On first startup, the proxy will automatically initiate OAuth2 device authentica
 
 All configuration is done via environment variables:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SERVER_HOST` | `0.0.0.0` | Server bind address |
-| `SERVER_PORT` | `8080` | Server port |
-| `LOG_LEVEL` | `info` | Logging level (debug, info, warn, error) |
-| `DEBUG_MODE` | `false` | Enable debug mode |
-| `RATE_LIMIT_RPS` | `10` | Requests per second limit |
-| `RATE_LIMIT_BURST` | `20` | Burst capacity for rate limiting |
-| `QWEN_DIR` | `.qwen` | Directory for credential storage |
-| `READ_TIMEOUT` | `30s` | HTTP read timeout |
-| `WRITE_TIMEOUT` | `30s` | HTTP write timeout |
+| Variable              | Default               | Description |
+|-----------------------|-----------------------|-------------|
+| `SERVER_HOST`         | `0.0.0.0`             | Server bind address |
+| `SERVER_PORT`         | `8080`                | Server port |
+| `LOG_LEVEL`           | `info`                | Logging level (debug, info, warn, error) |
+| `DEBUG_MODE`          | `false`               | Enable debug mode with enhanced logging |
+| `RATE_LIMIT_RPS`      | `10`                  | Requests per second limit |
+| `RATE_LIMIT_BURST`    | `20`                  | Burst capacity for rate limiting |
+| `QWEN_DIR`            | `.qwen`               | Directory for credential storage |
+| `READ_TIMEOUT`        | `30s`                 | HTTP read timeout |
+| `WRITE_TIMEOUT`       | `30s`                 | HTTP write timeout |
+| `SHUTDOWN_TIMEOUT`    | `30s`                 | Graceful shutdown timeout |
+| `ENABLE_TLS`          | `false`               | Enable TLS/HTTPS support |
+| `TLS_CERT_FILE`       | ``                    | Path to TLS certificate file |
+| `TLS_KEY_FILE`        | ``                    | Path to TLS private key file |
+| `TRUSTED_PROXIES`     | ``                    | Comma-separated list of trusted proxy IPs |
+| `TOKEN_REFRESH_BUFFER`| `5m`                  | Token refresh buffer time |
+
+**Note**: `TRUSTED_PROXIES` supports comma-separated values with automatic whitespace trimming (e.g., `"127.0.0.1, 192.168.1.1, 10.0.0.1"`).
+
+### Error Handling & Logging
+
+The proxy includes comprehensive error handling and structured logging for production monitoring:
+
+#### Error Types
+- **Authentication Errors**: OAuth2 and credential-related failures
+- **Validation Errors**: Request parameter validation failures
+- **Network Errors**: Connection and API communication failures
+- **Rate Limit Errors**: Request throttling and limiting
+- **Streaming Errors**: Real-time response processing failures
+- **Configuration Errors**: Startup and configuration validation failures
+
+#### Request Tracing
+Every API request receives a unique `X-Request-ID` header that is logged throughout the request lifecycle, enabling:
+- Log correlation across services
+- Request debugging and monitoring
+- Performance analysis per request
+- Error tracking and troubleshooting
+
+#### Rate Limiting Headers
+When rate limits are exceeded, the following headers are returned:
+- `X-RateLimit-Limit`: Maximum requests per second
+- `X-RateLimit-Remaining`: Remaining requests in current window
+- `X-RateLimit-Reset`: Unix timestamp when limit resets
+- `Retry-After`: Recommended wait time in seconds
+
+#### TLS Configuration
+To enable HTTPS support:
+```env
+ENABLE_TLS=true
+TLS_CERT_FILE=/path/to/certificate.pem
+TLS_KEY_FILE=/path/to/private-key.pem
+```
 
 ## Integration with n8n
 
-n8n is a powerful workflow automation tool that can integrate with various APIs. This proxy enables you to use Qwen AI models in your n8n workflows through HTTP Request nodes.
+n8n is a powerful workflow automation tool that can integrate with various APIs. This proxy enables you to use Qwen AI
+models in your n8n workflows through HTTP Request nodes.
 
 ### Basic Setup in n8n
 
 1. **Add HTTP Request Node**:
-   - Method: `POST`
-   - URL: `http://your-proxy-host:8080/v1/chat/completions`
+    - Method: `POST`
+    - URL: `http://your-proxy-host:8080/v1/chat/completions`
 
 2. **Headers** (if required):
    ```json
@@ -198,8 +257,28 @@ Example workflow configuration:
     }
   ],
   "connections": {
-    "Webhook": { "main": [[{ "node": "Qwen Chat", "type": "main", "index": 0 }]] },
-    "Qwen Chat": { "main": [[{ "node": "Response", "type": "main", "index": 0 }]] }
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Qwen Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qwen Chat": {
+      "main": [
+        [
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   }
 }
 ```
@@ -266,22 +345,42 @@ Example workflow configuration:
 
 - **Load Balancing**: Run multiple proxy instances behind a load balancer
 - **Monitoring**: Use n8n's built-in monitoring or external tools
-- **Security**: Keep proxy behind firewall, use HTTPS in production
-- **Scaling**: Adjust rate limits based on your n8n workflow requirements
+- **Security**: Keep proxy behind firewall, use HTTPS in production with `ENABLE_TLS=true`
+- **Request Tracing**: Use `X-Request-ID` headers for distributed tracing across services
+- **Rate Limiting**: Adjust `RATE_LIMIT_RPS` and `RATE_LIMIT_BURST` based on your n8n workflow requirements
+- **Error Handling**: Leverage structured error types for automated alerting and monitoring
 
 ## Development
 
 ### Building
+
 ```bash
 go build -o qwen-go-proxy ./cmd/server
 ```
 
 ### Testing
+
 ```bash
 go test ./...
 ```
 
+Run specific test suites:
+```bash
+# Test infrastructure components
+go test ./internal/infrastructure/...
+
+# Test domain entities and error handling
+go test ./internal/domain/...
+
+# Test controllers and API endpoints
+go test ./internal/interfaces/controllers/...
+
+# Run tests with coverage
+go test -cover ./...
+```
+
 ### Docker Development
+
 ```bash
 docker-compose up --build
 ```
@@ -291,28 +390,51 @@ docker-compose up --build
 ### Common Issues
 
 1. **Authentication Failures**:
-   - Ensure Qwen account has API access
-   - Check network connectivity to `chat.qwen.ai`
-   - Clear `.qwen/` directory and re-authenticate
+    - Ensure Qwen account has API access
+    - Check network connectivity to `chat.qwen.ai`
+    - Clear `.qwen/` directory and re-authenticate
+    - Check logs for request ID to trace authentication flow
 
 2. **Rate Limiting**:
-   - Increase `RATE_LIMIT_RPS` and `RATE_LIMIT_BURST` in configuration
-   - Implement exponential backoff in n8n workflows
+    - Increase `RATE_LIMIT_RPS` and `RATE_LIMIT_BURST` in configuration
+    - Implement exponential backoff in n8n workflows
+    - Monitor `X-RateLimit-*` headers in responses
 
-3. **Connection Refused**:
-   - Verify server is running on correct host/port
-   - Check firewall rules
-   - Use `docker-compose logs` for container debugging
+3. **TLS/HTTPS Issues**:
+    - Verify `TLS_CERT_FILE` and `TLS_KEY_FILE` paths are correct
+    - Ensure certificate files have proper permissions
+    - Check that `ENABLE_TLS=true` is set
+
+4. **Connection Refused**:
+    - Verify server is running on correct host/port
+    - Check firewall rules
+    - Use `docker-compose logs` for container debugging
+
+5. **Request Tracing**:
+    - Use `X-Request-ID` headers to correlate logs across services
+    - Enable `DEBUG_MODE=true` for detailed request/response logging
+    - Check `/health/detailed` endpoint for system status
 
 ### Logs
-View logs with:
+
+View logs with structured request tracing:
+
 ```bash
 docker-compose logs -f qwen-api-proxy
 ```
 
 Or from source:
+
 ```bash
 LOG_LEVEL=debug ./qwen-go-proxy
+```
+
+#### Request Tracing
+When debugging issues, use the `X-Request-ID` header from API responses to correlate logs:
+
+```bash
+# Filter logs by request ID
+docker-compose logs | grep "request_id=YOUR_REQUEST_ID"
 ```
 
 ## License
@@ -329,6 +451,7 @@ LOG_LEVEL=debug ./qwen-go-proxy
 ## Support
 
 For issues and questions:
+
 - Check the troubleshooting section above
 - Review n8n documentation for workflow examples
 - Open an issue in the repository

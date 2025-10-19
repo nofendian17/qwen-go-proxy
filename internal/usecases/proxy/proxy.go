@@ -1,34 +1,45 @@
 package proxy
 
 import (
-	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 
 	"qwen-go-proxy/internal/domain/entities"
 	"qwen-go-proxy/internal/infrastructure/logging"
 	"qwen-go-proxy/internal/interfaces/gateways"
 	"qwen-go-proxy/internal/usecases/auth"
+	"qwen-go-proxy/internal/usecases/streaming"
 )
+
+// ProxyUseCaseInterface defines the interface for proxy use case operations
+type ProxyUseCaseInterface interface {
+	ChatCompletions(req *entities.ChatCompletionRequest) (*entities.ChatCompletionResponse, error)
+	StreamChatCompletions(req *entities.ChatCompletionRequest, writer http.ResponseWriter) error
+	GetModels() []*entities.ModelInfo
+	AuthenticateManually() error
+	CheckAuthentication() (*entities.Credentials, error)
+}
 
 // ProxyUseCase defines the API proxy use case
 type ProxyUseCase struct {
-	authUseCase  *auth.AuthUseCase
-	qwenGateway  gateways.QwenAPIGateway
-	logger       *logging.Logger
-	defaultModel string
+	authUseCase      auth.AuthUseCaseInterface
+	qwenGateway      gateways.QwenAPIGateway
+	streamingUseCase streaming.StreamingUseCaseInterface
+	logger           logging.LoggerInterface
+	defaultModel     string
 }
 
 // NewProxyUseCase creates a new proxy use case
-func NewProxyUseCase(authUseCase *auth.AuthUseCase, qwenGateway gateways.QwenAPIGateway, logger *logging.Logger) *ProxyUseCase {
+func NewProxyUseCase(authUseCase auth.AuthUseCaseInterface, qwenGateway gateways.QwenAPIGateway, streamingUseCase streaming.StreamingUseCaseInterface, logger logging.LoggerInterface) *ProxyUseCase {
 	return &ProxyUseCase{
-		authUseCase:  authUseCase,
-		qwenGateway:  qwenGateway,
-		logger:       logger,
-		defaultModel: "qwen3-coder-plus",
+		authUseCase:      authUseCase,
+		qwenGateway:      qwenGateway,
+		streamingUseCase: streamingUseCase,
+		logger:           logger,
+		defaultModel:     "qwen3-coder-plus",
 	}
 }
 
@@ -83,7 +94,7 @@ func (uc *ProxyUseCase) ChatCompletions(req *entities.ChatCompletionRequest) (*e
 	return &response, nil
 }
 
-// StreamChatCompletions handles streaming chat completion requests
+// StreamChatCompletions handles streaming chat completion requests with advanced features
 func (uc *ProxyUseCase) StreamChatCompletions(req *entities.ChatCompletionRequest, writer http.ResponseWriter) error {
 	credentials, err := uc.authUseCase.EnsureAuthenticated()
 	if err != nil {
@@ -115,109 +126,8 @@ func (uc *ProxyUseCase) StreamChatCompletions(req *entities.ChatCompletionReques
 		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, errorMsg)
 	}
 
-	// Set headers for SSE
-	writer.Header().Set("Content-Type", "text/event-stream")
-	writer.Header().Set("Cache-Control", "no-cache")
-	writer.Header().Set("Connection", "keep-alive")
-
-	writer.WriteHeader(http.StatusOK)
-
-	// Stream the response
-	scanner := bufio.NewScanner(resp.Body)
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		// Parse SSE format: data: {"choices":[{"delta":{"content":"..."}}],...}
-		if strings.HasPrefix(line, "data: ") {
-			data := strings.TrimPrefix(line, "data: ")
-
-			// Handle special SSE messages
-			if data == "[DONE]" {
-				// End of stream - send OpenAI done message
-				writer.Write([]byte("data: [DONE]\n\n"))
-				break
-			}
-
-			// Parse JSON response
-			var response map[string]interface{}
-			if err := json.Unmarshal([]byte(data), &response); err != nil {
-				uc.logger.Error("Failed to parse streaming response", "error", err)
-				continue
-			}
-
-			// Convert Qwen format to OpenAI chat completion chunk format
-			if id, ok := response["id"].(string); ok {
-				if created, ok := response["created"].(float64); ok {
-					if choices, ok := response["choices"].([]interface{}); ok && len(choices) > 0 {
-						if choice, ok := choices[0].(map[string]interface{}); ok {
-							// Create OpenAI format chunk
-							chunk := map[string]interface{}{
-								"id":      id,
-								"object":  "chat.completion.chunk",
-								"created": created,
-								"model":   response["model"],
-								"choices": []map[string]interface{}{
-									{
-										"index": 0,
-										"delta": choice["delta"],
-									},
-								},
-								"usage": nil,
-							}
-
-							// Handle tool calls in delta
-							if delta, ok := choice["delta"].(map[string]interface{}); ok {
-								if toolCalls, exists := delta["tool_calls"]; exists {
-									// Ensure tool calls are properly formatted
-									if toolCallsSlice, ok := toolCalls.([]interface{}); ok {
-										for i, tc := range toolCallsSlice {
-											if tcMap, ok := tc.(map[string]interface{}); ok {
-												// Ensure type is set
-												if _, hasType := tcMap["type"]; !hasType {
-													tcMap["type"] = "function"
-												}
-												// Ensure index is set for streaming
-												tcMap["index"] = i
-											}
-										}
-									}
-									chunk["choices"].([]map[string]interface{})[0]["delta"] = delta
-								}
-							}
-
-							// Add finish_reason if present
-							if finishReason, exists := choice["finish_reason"]; exists {
-								chunk["choices"].([]map[string]interface{})[0]["finish_reason"] = finishReason
-							}
-
-							// Marshal to JSON
-							chunkJSON, err := json.Marshal(chunk)
-							if err != nil {
-								uc.logger.Error("Failed to marshal chunk", "error", err)
-								continue
-							}
-
-							// Write as SSE data
-							writer.Write([]byte("data: " + string(chunkJSON) + "\n\n"))
-						}
-					}
-				}
-			}
-		}
-
-		// Flush after each message
-		if flusher, ok := writer.(http.Flusher); ok {
-			flusher.Flush()
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("stream scanner error: %w", err)
-	}
-
-	// Ensure stream ends properly
-	writer.Write([]byte("data: [DONE]\n\n"))
-	return nil
+	// Use the advanced streaming usecase for processing
+	return uc.streamingUseCase.ProcessStreamingResponse(context.Background(), resp, writer)
 }
 
 // convertQwenToOpenAIResponse converts Qwen API response format to OpenAI format

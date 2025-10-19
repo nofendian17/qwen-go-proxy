@@ -30,7 +30,7 @@ services:
 
     # Health check with detailed endpoint
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${SERVER_PORT:-8080}/health/detailed"]
+      test: [ "CMD", "curl", "-f", "http://localhost:${SERVER_PORT:-8080}/health/detailed" ]
       interval: 30s
       timeout: 15s
       retries: 3

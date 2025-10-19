@@ -192,3 +192,15 @@ func (uc *AuthUseCase) AuthenticateManually() error {
 	_, err := uc.authenticateWithDeviceFlow()
 	return err
 }
+
+// CheckAuthentication checks if authentication is available without performing device flow
+func (uc *AuthUseCase) CheckAuthentication() (*entities.Credentials, error) {
+	return uc.EnsureAuthenticated()
+}
+
+// AuthUseCaseInterface defines the interface for authentication operations
+type AuthUseCaseInterface interface {
+	EnsureAuthenticated() (*entities.Credentials, error)
+	AuthenticateManually() error
+	CheckAuthentication() (*entities.Credentials, error)
+}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"qwen-go-proxy/internal/domain/entities"
 	"qwen-go-proxy/internal/infrastructure/config"
 	"qwen-go-proxy/internal/infrastructure/logging"
 	"qwen-go-proxy/internal/infrastructure/middleware"
@@ -17,6 +18,7 @@ import (
 	"qwen-go-proxy/internal/interfaces/gateways"
 	"qwen-go-proxy/internal/usecases/auth"
 	"qwen-go-proxy/internal/usecases/proxy"
+	"qwen-go-proxy/internal/usecases/streaming"
 )
 
 func main() {
@@ -46,9 +48,21 @@ func main() {
 	// Initialize repositories
 	credentialRepo := auth.NewFileCredentialRepository(cfg.QWENDir)
 
+	// Create streaming configuration
+	streamingConfig := &entities.StreamingConfig{
+		MaxErrors:           cfg.StreamingMaxErrors,
+		BufferSize:          cfg.StreamingBufferSize,
+		TimeoutSeconds:      cfg.StreamingTimeoutSeconds,
+		WindowSize:          cfg.StreamingWindowSize,
+		SimilarityThreshold: cfg.StreamingSimilarityThreshold,
+		TimeWindow:          cfg.StreamingTimeWindow,
+		MinConfidence:       cfg.StreamingMinConfidence,
+	}
+
 	// Initialize use cases
 	authUseCase := auth.NewAuthUseCase(cfg, oauthGateway, credentialRepo, logger)
-	proxyUseCase := proxy.NewProxyUseCase(authUseCase, qwenGateway, logger)
+	streamingUseCase := streaming.NewStreamingUseCase(streamingConfig, logger)
+	proxyUseCase := proxy.NewProxyUseCase(authUseCase, qwenGateway, streamingUseCase, logger)
 
 	// Initialize controllers
 	apiController := controllers.NewAPIController(proxyUseCase, logger)
@@ -61,6 +75,7 @@ func main() {
 	router := gin.Default()
 
 	// Add middleware
+	router.Use(middleware.RequestID())
 	router.Use(middleware.RequestLogging(logger, cfg.DebugMode))
 	router.Use(middleware.RateLimit(cfg.RateLimitRequestsPerSecond, cfg.RateLimitBurst))
 	router.Use(middleware.CORS())
@@ -84,11 +99,15 @@ func main() {
 
 	// Enhanced health check with system metrics
 	router.GET("/health/detailed", func(c *gin.Context) {
+		requestID := middleware.GetRequestID(c)
+		c.Header("X-Request-ID", requestID) // Ensure it's in response headers
+
 		health := gin.H{
-			"status":    "healthy",
-			"timestamp": time.Now().Unix(),
-			"version":   "1.0.0",
-			"uptime":    time.Since(startTime).String(),
+			"status":     "healthy",
+			"timestamp":  time.Now().Unix(),
+			"version":    "1.0.0",
+			"uptime":     time.Since(startTime).String(),
+			"request_id": requestID,
 			"config": gin.H{
 				"debug_mode":  cfg.DebugMode,
 				"log_level":   cfg.LogLevel,
@@ -100,6 +119,7 @@ func main() {
 		// Check authentication status
 		credentials, err := authUseCase.EnsureAuthenticated()
 		if err != nil {
+			logger.Warn("Health check authentication failed", "request_id", requestID, "error", err)
 			health["auth_status"] = "unauthenticated"
 			health["auth_error"] = err.Error()
 		} else {
@@ -107,6 +127,7 @@ func main() {
 			health["auth_info"] = credentials.Sanitize()
 		}
 
+		logger.Info("Health check requested", "request_id", requestID, "status", "healthy")
 		c.JSON(http.StatusOK, health)
 	})
 
@@ -141,10 +162,28 @@ func main() {
 		WriteTimeout: cfg.WriteTimeout,
 	}
 
+	// Configure TLS if enabled
+	if cfg.EnableTLS {
+		if cfg.TLSCertFile == "" || cfg.TLSKeyFile == "" {
+			log.Fatalf("TLS enabled but certificate files not configured")
+		}
+
+		logger.Info("TLS enabled", "cert_file", cfg.TLSCertFile, "key_file", cfg.TLSKeyFile)
+
+		// In production, you might want to add more TLS configuration here
+		// such as MinVersion, CipherSuites, etc.
+	}
+
 	// Start server in a goroutine
 	go func() {
 		logger.Info("Starting HTTP server", "address", cfg.GetServerAddress())
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		var err error
+		if cfg.EnableTLS {
+			err = srv.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile)
+		} else {
+			err = srv.ListenAndServe()
+		}
+		if err != nil && err != http.ErrServerClosed {
 			logger.Error("HTTP server failed", "error", err)
 			// Don't use log.Fatalf here as it would prevent graceful shutdown
 			stop()
