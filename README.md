@@ -513,7 +513,7 @@ docker-compose logs | grep "request_id=YOUR_REQUEST_ID"
 
 ## License
 
-[Add your license here]
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Contributing
 

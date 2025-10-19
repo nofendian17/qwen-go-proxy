@@ -6,15 +6,9 @@ builds:
       - linux
       - windows
       - darwin
-      - freebsd
-      - openbsd
     goarch:
       - amd64
       - arm64
-      - arm
-    goarm:
-      - "6"
-      - "7"
     ignore:
       - goos: windows
         goarch: arm64
@@ -36,7 +30,6 @@ archives:
         format: zip
     files:
       - README.md
-      - LICENSE
 
 # Checksum customization
 checksum:
