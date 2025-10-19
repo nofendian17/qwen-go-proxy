@@ -66,6 +66,8 @@ dockers:
     extra_files:
       - go.mod
       - go.sum
+      - cmd
+      - internal
 
 # GitHub Actions integration
 before:

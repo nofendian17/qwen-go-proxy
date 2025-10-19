@@ -3,7 +3,6 @@
 .gitignore
 
 # Docker
-Dockerfile
 .dockerignore
 docker-compose.yml
 
@@ -13,9 +12,6 @@ README.md
 # Development files
 .env
 *.log
-
-# Go build artifacts
-qwen-go-proxy
 
 # IDE files
 .vscode/
@@ -28,3 +24,7 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.swp
+
+# Exclude test files and mocks for smaller Docker builds
+**/*_test.go
+**/mocks/
