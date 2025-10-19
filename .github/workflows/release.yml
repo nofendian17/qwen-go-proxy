@@ -42,6 +42,29 @@ jobs:
       - name: Publish Docker images
         if: success()
         run: |
+          # Login to GitHub Container Registry
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
-          docker push ghcr.io/${{ github.repository_owner }}/qwen-go-proxy:v0.0.1
-          docker push ghcr.io/${{ github.repository_owner }}/qwen-go-proxy:latest
+
+          # Extract version from tag (remove 'v' prefix)
+          DOCKER_TAG="${GITHUB_REF#refs/tags/v}"
+          IMAGE_NAME="ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}"
+
+          # Push version-specific tag
+          echo "Pushing Docker image: ${IMAGE_NAME}:${DOCKER_TAG}"
+          docker push "${IMAGE_NAME}:${DOCKER_TAG}" || {
+            echo "Error: Failed to push ${IMAGE_NAME}:${DOCKER_TAG}"
+            exit 1
+          }
+
+          # Push latest tag only for stable releases (not pre-releases)
+          if [[ ! "${DOCKER_TAG}" =~ (alpha|beta|rc|pre|preview) ]]; then
+            echo "Pushing Docker image: ${IMAGE_NAME}:latest"
+            docker push "${IMAGE_NAME}:latest" || {
+              echo "Error: Failed to push ${IMAGE_NAME}:latest"
+              exit 1
+            }
+          else
+            echo "Skipping latest tag for pre-release: ${DOCKER_TAG}"
+          fi
+
+          echo "Docker images published successfully"
