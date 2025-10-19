@@ -5,7 +5,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o qwen-go-proxy ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -o qwen-go-proxy ./cmd/server/main.go
 
 # Runtime stage
 FROM alpine:latest
