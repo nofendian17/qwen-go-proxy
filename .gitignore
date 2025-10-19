@@ -1,5 +1,4 @@
 .claude
-.idea
 .env
 .qwen/oauth_creds.json
 
