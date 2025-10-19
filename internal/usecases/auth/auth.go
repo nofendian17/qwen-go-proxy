@@ -118,8 +118,13 @@ func (uc *AuthUseCase) EnsureAuthenticated() (*entities.Credentials, error) {
 		uc.refreshMutex.Lock()
 		defer uc.refreshMutex.Unlock()
 
-		// Double-check after acquiring lock
+		// Double-check after acquiring lock - reload credentials in case another goroutine refreshed
 		uc.tokenMutex.RLock()
+		credentials, err = uc.credentialRepo.Load()
+		if err != nil {
+			uc.tokenMutex.RUnlock()
+			return nil, fmt.Errorf("failed to reload credentials: %w", err)
+		}
 		now = time.Now().UnixMilli()
 		timeUntilExpiry = credentials.ExpiryDate - now
 		isStillExpired := timeUntilExpiry < bufferInMillis
@@ -127,10 +132,17 @@ func (uc *AuthUseCase) EnsureAuthenticated() (*entities.Credentials, error) {
 
 		if isStillExpired {
 			uc.logger.Info("Qwen token expired or close to expiring, refreshing")
-			if err := uc.refreshAccessToken(credentials); err != nil {
+			newCredentials, err := uc.refreshAccessToken(credentials)
+			if err != nil {
 				uc.logger.Warn("Failed to refresh token, falling back to device authentication", "error", err)
 				return uc.authenticateWithDeviceFlow()
 			}
+			return newCredentials, nil
+		} else {
+			// Another goroutine already refreshed, reload the new credentials
+			uc.tokenMutex.RLock()
+			defer uc.tokenMutex.RUnlock()
+			return uc.credentialRepo.Load()
 		}
 	}
 
@@ -138,14 +150,14 @@ func (uc *AuthUseCase) EnsureAuthenticated() (*entities.Credentials, error) {
 }
 
 // refreshAccessToken refreshes the access token
-func (uc *AuthUseCase) refreshAccessToken(credentials *entities.Credentials) error {
+func (uc *AuthUseCase) refreshAccessToken(credentials *entities.Credentials) (*entities.Credentials, error) {
 	if credentials.RefreshToken == "" {
-		return fmt.Errorf("no refresh token available in credentials")
+		return nil, fmt.Errorf("no refresh token available in credentials")
 	}
 
 	newCredentials, err := uc.oauthGateway.RefreshToken(credentials.RefreshToken, uc.config.QWENOAuthClientID)
 	if err != nil {
-		return fmt.Errorf("failed to refresh token: %w", err)
+		return nil, fmt.Errorf("failed to refresh token: %w", err)
 	}
 
 	// Keep existing resource URL
@@ -154,7 +166,11 @@ func (uc *AuthUseCase) refreshAccessToken(credentials *entities.Credentials) err
 	uc.tokenMutex.Lock()
 	defer uc.tokenMutex.Unlock()
 
-	return uc.credentialRepo.Save(newCredentials)
+	if err := uc.credentialRepo.Save(newCredentials); err != nil {
+		return nil, fmt.Errorf("failed to save refreshed credentials: %w", err)
+	}
+
+	return newCredentials, nil
 }
 
 // authenticateWithDeviceFlow performs OAuth2 device authorization flow

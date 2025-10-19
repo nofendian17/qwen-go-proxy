@@ -35,6 +35,9 @@ authentication and AI capabilities.
 
 - **git**: For version control (recommended)
 - **make**: For using Makefile commands (if provided)
+- **golangci-lint**: For code linting (development)
+- **goimports**: For code formatting (development)
+- **goreleaser**: For automated releases (development/releases)
 
 ## Installation
 
@@ -384,6 +387,77 @@ go test -cover ./...
 ```bash
 docker-compose up --build
 ```
+
+### Development Tools
+
+Use the provided Makefile for common development tasks:
+
+```bash
+make help                    # Show all available commands
+make build                   # Build binary for current platform
+make build-all              # Build binaries for multiple platforms
+make test                   # Run all tests
+make test-coverage          # Run tests with coverage report
+make lint                   # Run code linting
+make fmt                    # Format Go code
+make clean                  # Clean build artifacts
+make docker-build           # Build Docker image
+make docker-run             # Run Docker container
+make release-dry-run        # Test release process
+make install-goreleaser     # Install GoReleaser
+```
+
+## Releases
+
+This project uses [GoReleaser](https://goreleaser.com/) for automated releases. When a new tag is pushed to the repository, GoReleaser automatically:
+
+- Builds binaries for multiple platforms (Linux, macOS, Windows, FreeBSD, OpenBSD)
+- Creates archives and checksums
+- Generates changelogs
+- Creates GitHub releases
+- Builds and pushes Docker images to GitHub Container Registry
+
+### Creating a Release
+
+1. **Update version in code** (if needed):
+   ```bash
+   # The version is automatically determined from git tags
+   ```
+
+2. **Create and push a tag**:
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+3. **GitHub Actions will automatically**:
+   - Run tests
+   - Build binaries for all platforms
+   - Create GitHub release with assets
+   - Push Docker images
+
+### Manual Release (Development)
+
+For testing the release process locally:
+
+```bash
+# Install GoReleaser
+make install-goreleaser
+
+# Test release process without publishing
+make release-dry-run
+
+# Check release configuration
+make release-check
+```
+
+### Release Artifacts
+
+Each release includes:
+- Binaries for multiple platforms and architectures
+- SHA256 checksums for verification
+- Docker images tagged with version and `latest`
+- Generated changelog
 
 ## Troubleshooting
 

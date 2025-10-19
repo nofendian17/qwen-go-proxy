@@ -1,3 +1,32 @@
 .claude
+.idea
 .env
 .qwen/oauth_creds.json
+
+# Build artifacts
+bin/
+qwen-go-proxy
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test artifacts
+*.test
+*.out
+coverage.html
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Goreleaser artifacts
+dist/
