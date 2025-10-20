@@ -1,8 +1,6 @@
 package config
 
 import (
-	"fmt"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -42,85 +40,7 @@ func LoadConfig() (*entities.Config, error) {
 		TLSKeyFile:                 getEnvWithDefault("TLS_KEY_FILE", ""),
 	}
 
-	// Validate configuration
-	if err := validateConfig(config); err != nil {
-		return nil, fmt.Errorf("configuration validation failed: %w", err)
-	}
-
 	return config, nil
-}
-
-// validateConfig checks if the configuration is valid
-func validateConfig(c *entities.Config) error {
-	// Validate server port is in valid range (1-65535)
-	if c.ServerPort < 1 || c.ServerPort > 65535 {
-		return fmt.Errorf("SERVER_PORT must be a valid port number (1-65535), got: %d", c.ServerPort)
-	}
-
-	if c.QWENOAuthBaseURL == "" {
-		return fmt.Errorf("QWEN_OAUTH_BASE_URL cannot be empty")
-	}
-
-	if c.QWENOAuthClientID == "" {
-		return fmt.Errorf("QWEN_OAUTH_CLIENT_ID cannot be empty")
-	}
-
-	if c.QWENDir == "" {
-		return fmt.Errorf("QWEN_DIR cannot be empty")
-	}
-
-	if c.TokenRefreshBuffer < 0 {
-		return fmt.Errorf("TOKEN_REFRESH_BUFFER must be non-negative")
-	}
-
-	if c.ShutdownTimeout < 0 {
-		return fmt.Errorf("SHUTDOWN_TIMEOUT_SECONDS must be non-negative")
-	}
-
-	if c.RateLimitRequestsPerSecond <= 0 {
-		return fmt.Errorf("RATE_LIMIT_REQUESTS_PER_SECOND must be positive")
-	}
-
-	if c.RateLimitBurst <= 0 {
-		return fmt.Errorf("RATE_LIMIT_BURST must be positive")
-	}
-
-	if c.LogLevel == "" {
-		return fmt.Errorf("LOG_LEVEL cannot be empty")
-	}
-
-	// Validate log level
-	validLogLevels := []string{"debug", "info", "warn", "error", "fatal"}
-	if !contains(validLogLevels, c.LogLevel) {
-		return fmt.Errorf("LOG_LEVEL must be one of: %v, got: %s", validLogLevels, c.LogLevel)
-	}
-
-	// Validate URLs
-	if _, err := url.Parse(c.QWENOAuthBaseURL); err != nil {
-		return fmt.Errorf("QWEN_OAUTH_BASE_URL is not a valid URL: %w", err)
-	}
-	if parsed, err := url.Parse(c.QWENOAuthBaseURL); err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return fmt.Errorf("QWEN_OAUTH_BASE_URL must be a valid absolute URL with scheme and host")
-	}
-
-	if _, err := url.Parse(c.APIBaseURL); err != nil {
-		return fmt.Errorf("API_BASE_URL is not a valid URL: %w", err)
-	}
-	if parsed, err := url.Parse(c.APIBaseURL); err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return fmt.Errorf("API_BASE_URL must be a valid absolute URL with scheme and host")
-	}
-
-	return nil
-}
-
-// contains checks if a slice contains a specific string
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }
 
 // getEnvWithDefault gets an environment variable with a default fallback

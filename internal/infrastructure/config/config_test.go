@@ -111,6 +111,7 @@ func TestValidateConfig_Valid(t *testing.T) {
 		ServerPort:                 8080,
 		QWENOAuthBaseURL:           "https://chat.qwen.ai",
 		QWENOAuthClientID:          "test-client-id",
+		QWENOAuthDeviceAuthURL:     "https://chat.qwen.ai/api/v1/oauth2/device/code",
 		QWENDir:                    ".qwen",
 		TokenRefreshBuffer:         5 * time.Minute,
 		ShutdownTimeout:            30 * time.Second,
@@ -120,7 +121,7 @@ func TestValidateConfig_Valid(t *testing.T) {
 		APIBaseURL:                 "https://portal.qwen.ai/v1",
 	}
 
-	err := validateConfig(config)
+	err := config.Validate()
 	assert.NoError(t, err)
 }
 
@@ -140,6 +141,7 @@ func TestValidateConfig_InvalidPort(t *testing.T) {
 				ServerPort:                 tt.port,
 				QWENOAuthBaseURL:           "https://chat.qwen.ai",
 				QWENOAuthClientID:          "test-client-id",
+				QWENOAuthDeviceAuthURL:     "https://chat.qwen.ai/api/v1/oauth2/device/code",
 				QWENDir:                    ".qwen",
 				TokenRefreshBuffer:         5 * time.Minute,
 				ShutdownTimeout:            30 * time.Second,
@@ -149,7 +151,7 @@ func TestValidateConfig_InvalidPort(t *testing.T) {
 				APIBaseURL:                 "https://portal.qwen.ai/v1",
 			}
 
-			err := validateConfig(config)
+			err := config.Validate()
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.error)
 		})
@@ -172,6 +174,7 @@ func TestValidateConfig_InvalidURLs(t *testing.T) {
 				ServerPort:                 8080,
 				QWENOAuthBaseURL:           "https://chat.qwen.ai",
 				QWENOAuthClientID:          "test-client-id",
+				QWENOAuthDeviceAuthURL:     "https://chat.qwen.ai/api/v1/oauth2/device/code",
 				QWENDir:                    ".qwen",
 				TokenRefreshBuffer:         5 * time.Minute,
 				ShutdownTimeout:            30 * time.Second,
@@ -187,7 +190,7 @@ func TestValidateConfig_InvalidURLs(t *testing.T) {
 				config.APIBaseURL = tt.url
 			}
 
-			err := validateConfig(config)
+			err := config.Validate()
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.field)
 		})
@@ -199,6 +202,7 @@ func TestValidateConfig_InvalidLogLevel(t *testing.T) {
 		ServerPort:                 8080,
 		QWENOAuthBaseURL:           "https://chat.qwen.ai",
 		QWENOAuthClientID:          "test-client-id",
+		QWENOAuthDeviceAuthURL:     "https://chat.qwen.ai/api/v1/oauth2/device/code",
 		QWENDir:                    ".qwen",
 		TokenRefreshBuffer:         5 * time.Minute,
 		ShutdownTimeout:            30 * time.Second,
@@ -208,7 +212,7 @@ func TestValidateConfig_InvalidLogLevel(t *testing.T) {
 		APIBaseURL:                 "https://portal.qwen.ai/v1",
 	}
 
-	err := validateConfig(config)
+	err := config.Validate()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "LOG_LEVEL must be one of:")
 }
@@ -231,6 +235,7 @@ func TestValidateConfig_EmptyFields(t *testing.T) {
 				ServerPort:                 8080,
 				QWENOAuthBaseURL:           "https://chat.qwen.ai",
 				QWENOAuthClientID:          "test-client-id",
+				QWENOAuthDeviceAuthURL:     "https://chat.qwen.ai/api/v1/oauth2/device/code",
 				QWENDir:                    ".qwen",
 				TokenRefreshBuffer:         5 * time.Minute,
 				ShutdownTimeout:            30 * time.Second,
@@ -242,7 +247,7 @@ func TestValidateConfig_EmptyFields(t *testing.T) {
 
 			tt.setup(config)
 
-			err := validateConfig(config)
+			err := config.Validate()
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.error)
 		})
@@ -256,7 +261,7 @@ func TestValidateConfig_InvalidValues(t *testing.T) {
 		error string
 	}{
 		{"negative token refresh buffer", func(c *entities.Config) { c.TokenRefreshBuffer = -1 * time.Minute }, "TOKEN_REFRESH_BUFFER must be non-negative"},
-		{"negative shutdown timeout", func(c *entities.Config) { c.ShutdownTimeout = -1 * time.Second }, "SHUTDOWN_TIMEOUT_SECONDS must be non-negative"},
+		{"negative shutdown timeout", func(c *entities.Config) { c.ShutdownTimeout = -1 * time.Second }, "SHUTDOWN_TIMEOUT must be non-negative"},
 		{"zero rate limit rps", func(c *entities.Config) { c.RateLimitRequestsPerSecond = 0 }, "RATE_LIMIT_REQUESTS_PER_SECOND must be positive"},
 		{"negative rate limit burst", func(c *entities.Config) { c.RateLimitBurst = -1 }, "RATE_LIMIT_BURST must be positive"},
 	}
@@ -267,6 +272,7 @@ func TestValidateConfig_InvalidValues(t *testing.T) {
 				ServerPort:                 8080,
 				QWENOAuthBaseURL:           "https://chat.qwen.ai",
 				QWENOAuthClientID:          "test-client-id",
+				QWENOAuthDeviceAuthURL:     "https://chat.qwen.ai/api/v1/oauth2/device/code",
 				QWENDir:                    ".qwen",
 				TokenRefreshBuffer:         5 * time.Minute,
 				ShutdownTimeout:            30 * time.Second,
@@ -278,7 +284,7 @@ func TestValidateConfig_InvalidValues(t *testing.T) {
 
 			tt.setup(config)
 
-			err := validateConfig(config)
+			err := config.Validate()
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.error)
 		})
@@ -336,12 +342,6 @@ func TestHelperFunctions(t *testing.T) {
 	assert.Equal(t, []string{"a", "b", "c"}, getEnvSliceWithDefault("TEST_SLICE", []string{"default"}))
 	os.Setenv("TEST_SLICE", ",a,,b,")
 	assert.Equal(t, []string{"a", "b"}, getEnvSliceWithDefault("TEST_SLICE", []string{"default"}))
-}
-
-func TestContains(t *testing.T) {
-	assert.True(t, contains([]string{"a", "b", "c"}, "b"))
-	assert.False(t, contains([]string{"a", "b", "c"}, "d"))
-	assert.False(t, contains([]string{}, "a"))
 }
 
 // clearEnvVars clears all test environment variables

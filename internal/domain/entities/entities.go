@@ -5,8 +5,7 @@ package entities
 import (
 	"errors"
 	"fmt"
-	"math"
-	"strings"
+	"net/url"
 	"time"
 )
 
@@ -99,36 +98,83 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("config is nil")
 	}
 
+	// Validate server port is in valid range (1-65535)
+	if c.ServerPort < 1 || c.ServerPort > 65535 {
+		return fmt.Errorf("SERVER_PORT must be a valid port number (1-65535), got: %d", c.ServerPort)
+	}
+
 	if c.QWENOAuthBaseURL == "" {
-		return fmt.Errorf("qwen_oauth_base_url is required")
+		return fmt.Errorf("QWEN_OAUTH_BASE_URL cannot be empty")
 	}
+
 	if c.QWENOAuthClientID == "" {
-		return fmt.Errorf("qwen_oauth_client_id is required")
+		return fmt.Errorf("QWEN_OAUTH_CLIENT_ID cannot be empty")
 	}
+
 	if c.QWENOAuthDeviceAuthURL == "" {
-		return fmt.Errorf("qwen_oauth_device_auth_url is required")
+		return fmt.Errorf("QWEN_OAUTH_DEVICE_AUTH_URL cannot be empty")
 	}
+
 	if c.APIBaseURL == "" {
-		return fmt.Errorf("api_base_url is required")
+		return fmt.Errorf("API_BASE_URL cannot be empty")
+	}
+
+	if c.QWENDir == "" {
+		return fmt.Errorf("QWEN_DIR cannot be empty")
+	}
+
+	if c.TokenRefreshBuffer < 0 {
+		return fmt.Errorf("TOKEN_REFRESH_BUFFER must be non-negative")
+	}
+
+	if c.ShutdownTimeout < 0 {
+		return fmt.Errorf("SHUTDOWN_TIMEOUT must be non-negative")
+	}
+
+	if c.RateLimitRequestsPerSecond <= 0 {
+		return fmt.Errorf("RATE_LIMIT_REQUESTS_PER_SECOND must be positive")
+	}
+
+	if c.RateLimitBurst <= 0 {
+		return fmt.Errorf("RATE_LIMIT_BURST must be positive")
+	}
+
+	if c.LogLevel == "" {
+		return fmt.Errorf("LOG_LEVEL cannot be empty")
 	}
 
 	// Validate log level
-	validLogLevels := map[string]bool{
-		"debug": true, "info": true, "warn": true, "error": true,
-	}
-	if !validLogLevels[c.LogLevel] {
-		return fmt.Errorf("invalid log_level: %s (must be debug, info, warn, or error)", c.LogLevel)
+	validLogLevels := []string{"debug", "info", "warn", "error", "fatal"}
+	if !contains(validLogLevels, c.LogLevel) {
+		return fmt.Errorf("LOG_LEVEL must be one of: %v, got: %s", validLogLevels, c.LogLevel)
 	}
 
-	// Validate rate limiting values
-	if c.RateLimitRequestsPerSecond <= 0 {
-		return fmt.Errorf("rate_limit_rps must be positive")
+	// Validate URLs
+	if _, err := url.Parse(c.QWENOAuthBaseURL); err != nil {
+		return fmt.Errorf("QWEN_OAUTH_BASE_URL is not a valid URL: %w", err)
 	}
-	if c.RateLimitBurst <= 0 {
-		return fmt.Errorf("rate_limit_burst must be positive")
+	if parsed, err := url.Parse(c.QWENOAuthBaseURL); err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return fmt.Errorf("QWEN_OAUTH_BASE_URL must be a valid absolute URL with scheme and host")
+	}
+
+	if _, err := url.Parse(c.APIBaseURL); err != nil {
+		return fmt.Errorf("API_BASE_URL is not a valid URL: %w", err)
+	}
+	if parsed, err := url.Parse(c.APIBaseURL); err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return fmt.Errorf("API_BASE_URL must be a valid absolute URL with scheme and host")
 	}
 
 	return nil
+}
+
+// contains checks if a slice contains a specific string
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
 
 // GetServerAddress returns the full server address for HTTP server configuration
@@ -412,459 +458,6 @@ type ModelPermission struct {
 	Organization       string      `json:"organization"`
 	Group              interface{} `json:"group"`
 	IsBlocking         bool        `json:"is_blocking"`
-}
-
-// StreamingState represents the current state of stream processing
-type StreamingState int
-
-const (
-	StateInitial StreamingState = iota
-	StateStuttering
-	StateNormalFlow
-	StateRecovering
-	StateTerminating
-)
-
-func (s StreamingState) String() string {
-	switch s {
-	case StateInitial:
-		return "Initial"
-	case StateStuttering:
-		return "Stuttering"
-	case StateNormalFlow:
-		return "NormalFlow"
-	case StateRecovering:
-		return "Recovering"
-	case StateTerminating:
-		return "Terminating"
-	default:
-		return "Unknown"
-	}
-}
-
-// CircuitState represents the state of the circuit breaker
-type CircuitState int
-
-const (
-	CircuitClosed CircuitState = iota
-	CircuitOpen
-	CircuitHalfOpen
-)
-
-func (cs CircuitState) String() string {
-	switch cs {
-	case CircuitClosed:
-		return "Closed"
-	case CircuitOpen:
-		return "Open"
-	case CircuitHalfOpen:
-		return "HalfOpen"
-	default:
-		return "Unknown"
-	}
-}
-
-// StutteringAction represents the recommended action based on stuttering analysis
-type StutteringAction int
-
-const (
-	StutteringActionBuffer StutteringAction = iota
-	StutteringActionFlush
-	StutteringActionForward
-	StutteringActionWait
-)
-
-func (sa StutteringAction) String() string {
-	switch sa {
-	case StutteringActionBuffer:
-		return "Buffer"
-	case StutteringActionFlush:
-		return "Flush"
-	case StutteringActionForward:
-		return "Forward"
-	case StutteringActionWait:
-		return "Wait"
-	default:
-		return "Unknown"
-	}
-}
-
-// ChunkType represents the type of chunk received
-type ChunkType int
-
-const (
-	ChunkTypeData ChunkType = iota
-	ChunkTypeDone
-	ChunkTypeMalformed
-	ChunkTypeEmpty
-	ChunkTypeUnknown
-)
-
-func (c ChunkType) String() string {
-	switch c {
-	case ChunkTypeData:
-		return "Data"
-	case ChunkTypeDone:
-		return "Done"
-	case ChunkTypeMalformed:
-		return "Malformed"
-	case ChunkTypeEmpty:
-		return "Empty"
-	case ChunkTypeUnknown:
-		return "Unknown"
-	default:
-		return "Invalid"
-	}
-}
-
-// ContentChunk represents a chunk of content with metadata
-type ContentChunk struct {
-	Content    string
-	Timestamp  time.Time
-	Length     int
-	TokenCount int
-	ChunkIndex int
-}
-
-// StutteringResult represents the result of stuttering analysis
-type StutteringResult struct {
-	IsStuttering bool
-	Confidence   float64
-	Reason       string
-	ShouldBuffer bool
-	ShouldFlush  bool
-	NextAction   StutteringAction
-}
-
-// ParsedChunk represents a parsed chunk with metadata
-type ParsedChunk struct {
-	Type        ChunkType
-	RawLine     string
-	Content     string
-	IsValid     bool
-	Error       error
-	Metadata    map[string]interface{}
-	ParsedAt    time.Time
-	HasContent  bool
-	ContentText string
-}
-
-// StreamState holds the current state of stream processing
-type StreamState struct {
-	Current          StreamingState
-	IsStuttering     bool
-	Buffer           string
-	ChunkCount       int
-	ErrorCount       int
-	LastValidChunk   time.Time
-	StartTime        time.Time
-	LastChunkContent string // Track last chunk content for duplicate detection
-}
-
-// CircuitBreaker implements the circuit breaker pattern for upstream resilience
-type CircuitBreaker struct {
-	MaxFailures      int
-	ResetTimeout     time.Duration
-	State            CircuitState
-	FailureCount     int
-	SuccessCount     int
-	LastFailureTime  time.Time
-	LastSuccessTime  time.Time
-	HalfOpenMaxTries int
-	HalfOpenTries    int
-}
-
-// StreamingConfig holds configuration for the streaming handler
-type StreamingConfig struct {
-	MaxErrors      int
-	BufferSize     int
-	TimeoutSeconds int
-	WindowSize     int
-	TimeWindow     time.Duration
-	MinConfidence  float64
-}
-
-// StutteringDetector provides advanced stuttering detection
-type StutteringDetector struct {
-	WindowSize          int
-	SimilarityThreshold float64
-	ContentHistory      []ContentChunk
-	TimeWindow          time.Duration
-	MinConfidence       float64
-}
-
-// StreamingMetrics holds metrics for streaming operations
-type StreamingMetrics struct {
-	ChunksProcessed   int
-	ErrorsEncountered int
-	Duration          time.Duration
-	StateTransitions  []StateTransition
-	StutteringEvents  []StutteringEvent
-}
-
-// StateTransition represents a state transition with metadata
-type StateTransition struct {
-	From      StreamingState
-	To        StreamingState
-	Reason    string
-	Timestamp time.Time
-}
-
-// StutteringEvent represents a stuttering detection event
-type StutteringEvent struct {
-	Detected   bool
-	Confidence float64
-	Reason     string
-	Timestamp  time.Time
-}
-
-// IncrementChunk increments the chunk counter and updates last valid chunk time
-func (s *StreamState) IncrementChunk() {
-	s.ChunkCount++
-	s.LastValidChunk = time.Now()
-}
-
-// IncrementError increments the error counter
-func (s *StreamState) IncrementError() {
-	s.ErrorCount++
-}
-
-// TransitionTo changes the state and logs the transition (for use by processors)
-func (s *StreamState) TransitionTo(newState StreamingState, reason string) {
-	s.Current = newState
-	// Note: Logging is handled by the processor
-}
-
-// AnalyzeStuttering performs comprehensive stuttering analysis
-func (sd *StutteringDetector) AnalyzeStuttering(current, previous string) StutteringResult {
-	now := time.Now()
-
-	// Create content chunks
-	currentChunk := ContentChunk{
-		Content:    current,
-		Timestamp:  now,
-		Length:     len(current),
-		TokenCount: sd.estimateTokenCount(current),
-		ChunkIndex: len(sd.ContentHistory),
-	}
-
-	// Add to history
-	sd.addToHistory(currentChunk)
-
-	// If this is the first chunk, it's always stuttering
-	if len(sd.ContentHistory) <= 1 {
-		return StutteringResult{
-			IsStuttering: true,
-			Confidence:   1.0,
-			Reason:       "first chunk",
-			ShouldBuffer: true,
-			NextAction:   StutteringActionBuffer,
-		}
-	}
-
-	// Enhanced stuttering detection with more sensitive analysis
-	prefixMatch := sd.analyzePrefixMatch(current, previous)
-	exactMatch := sd.analyzeExactMatch(current, previous)
-	lengthProgression := sd.analyzeLengthProgression()
-	timingPattern := sd.analyzeTimingPattern()
-	contentSimilarity := sd.analyzeContentSimilarity(current, previous)
-	repetitionPattern := sd.analyzeRepetitionPattern()
-
-	// Very aggressive confidence scoring for repetitive content
-	confidence := (exactMatch*0.5 + prefixMatch*0.2 + repetitionPattern*0.3 + lengthProgression*0.1 + timingPattern*0.05 + contentSimilarity*0.05)
-
-	// Much lower threshold to catch even subtle stuttering
-	isStuttering := confidence >= (sd.MinConfidence * 0.6)
-
-	result := StutteringResult{
-		IsStuttering: isStuttering,
-		Confidence:   confidence,
-		Reason:       sd.buildReasonString(prefixMatch, lengthProgression, timingPattern, contentSimilarity, exactMatch, repetitionPattern),
-		ShouldBuffer: isStuttering,
-		ShouldFlush:  !isStuttering && len(sd.ContentHistory) > 1,
-	}
-
-	if isStuttering {
-		result.NextAction = StutteringActionBuffer
-	} else if result.ShouldFlush {
-		result.NextAction = StutteringActionFlush
-	} else {
-		result.NextAction = StutteringActionForward
-	}
-
-	return result
-}
-
-// analyzePrefixMatch checks if current content starts with previous content
-func (sd *StutteringDetector) analyzePrefixMatch(current, previous string) float64 {
-	if previous == "" || current == "" {
-		return 0.0
-	}
-
-	// Check if current starts with previous (indicating stuttering)
-	if strings.HasPrefix(current, previous) {
-		overlap := float64(len(previous)) / float64(len(current))
-		return overlap
-	}
-
-	return 0.0
-}
-
-// analyzeExactMatch checks if current content is exactly the same as previous content
-func (sd *StutteringDetector) analyzeExactMatch(current, previous string) float64 {
-	if previous == "" || current == "" {
-		return 0.0
-	}
-
-	if current == previous {
-		return 1.0
-	}
-
-	return 0.0
-}
-
-// analyzeRepetitionPattern detects repetitive patterns in recent chunks
-func (sd *StutteringDetector) analyzeRepetitionPattern() float64 {
-	if len(sd.ContentHistory) < 2 {
-		return 0.0
-	}
-
-	// Check last few chunks for repetition
-	recent := sd.ContentHistory[max(0, len(sd.ContentHistory)-5):]
-	if len(recent) < 2 {
-		return 0.0
-	}
-
-	// Check for repetition in recent chunks
-	repetitions := 0
-	totalComparisons := 0
-
-	for i := 1; i < len(recent); i++ {
-		totalComparisons++
-		if recent[i].Content == recent[i-1].Content {
-			repetitions++
-		}
-	}
-
-	// Also check for repetition with skip (e.g., every other chunk is the same)
-	for i := 2; i < len(recent); i++ {
-		totalComparisons++
-		if recent[i].Content == recent[i-2].Content {
-			repetitions++
-		}
-	}
-
-	if totalComparisons == 0 {
-		return 0.0
-	}
-
-	return float64(repetitions) / float64(totalComparisons)
-}
-
-// analyzeLengthProgression checks if content length is increasing appropriately
-func (sd *StutteringDetector) analyzeLengthProgression() float64 {
-	if len(sd.ContentHistory) < 2 {
-		return 0.0
-	}
-
-	recent := sd.ContentHistory[len(sd.ContentHistory)-2:]
-	totalLength := 0
-	for _, chunk := range recent {
-		totalLength += chunk.Length
-	}
-
-	// Expect some length progression
-	avgLength := float64(totalLength) / float64(len(recent))
-	return math.Min(1.0, avgLength/10.0) // Normalize
-}
-
-// analyzeTimingPattern analyzes chunk arrival timing
-func (sd *StutteringDetector) analyzeTimingPattern() float64 {
-	if len(sd.ContentHistory) < 3 {
-		return 0.0
-	}
-
-	recent := sd.ContentHistory[len(sd.ContentHistory)-3:]
-	timeDiffs := make([]time.Duration, 0, len(recent)-1)
-
-	for i := 1; i < len(recent); i++ {
-		diff := recent[i].Timestamp.Sub(recent[i-1].Timestamp)
-		timeDiffs = append(timeDiffs, diff)
-	}
-
-	// Check for irregular timing (potential stuttering)
-	irregularCount := 0
-	for _, diff := range timeDiffs {
-		if diff > sd.TimeWindow/2 {
-			irregularCount++
-		}
-	}
-
-	return float64(irregularCount) / float64(len(timeDiffs))
-}
-
-// analyzeContentSimilarity uses simple Levenshtein-like distance
-func (sd *StutteringDetector) analyzeContentSimilarity(current, previous string) float64 {
-	if previous == "" {
-		return 0.0
-	}
-
-	// Simple similarity based on common prefix length
-	minLen := math.Min(float64(len(current)), float64(len(previous)))
-	commonPrefix := 0
-	for i := 0; i < int(minLen); i++ {
-		if current[i] == previous[i] {
-			commonPrefix++
-		} else {
-			break
-		}
-	}
-
-	return float64(commonPrefix) / math.Max(float64(len(current)), float64(len(previous)))
-}
-
-// buildReasonString builds a reason string from analysis factors
-func (sd *StutteringDetector) buildReasonString(prefix, length, timing, similarity, exact, repetition float64) string {
-	reasons := []string{}
-	if exact > 0.8 {
-		reasons = append(reasons, "exact match")
-	}
-	if prefix > 0.5 {
-		reasons = append(reasons, "prefix match")
-	}
-	if repetition > 0.5 {
-		reasons = append(reasons, "repetition pattern")
-	}
-	if length < 0.3 {
-		reasons = append(reasons, "poor length progression")
-	}
-	if timing > 0.5 {
-		reasons = append(reasons, "irregular timing")
-	}
-	if similarity > 0.8 {
-		reasons = append(reasons, "high content similarity")
-	}
-
-	if len(reasons) == 0 {
-		return "normal pattern"
-	}
-	return strings.Join(reasons, ", ")
-}
-
-// addToHistory adds a chunk to the content history
-func (sd *StutteringDetector) addToHistory(chunk ContentChunk) {
-	sd.ContentHistory = append(sd.ContentHistory, chunk)
-
-	// Maintain window size
-	if len(sd.ContentHistory) > sd.WindowSize {
-		sd.ContentHistory = sd.ContentHistory[1:]
-	}
-}
-
-// estimateTokenCount provides a rough token count estimate
-func (sd *StutteringDetector) estimateTokenCount(content string) int {
-	// Rough estimation: ~4 characters per token
-	return len(content) / 4
 }
 
 // Custom Error Types for better error handling and classification
