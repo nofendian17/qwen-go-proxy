@@ -85,6 +85,18 @@ type AuthUseCase struct {
 
 // NewAuthUseCase creates a new authentication use case
 func NewAuthUseCase(config *entities.Config, oauthGateway gateways.OAuthGateway, credentialRepo CredentialRepository, logger *logging.Logger) *AuthUseCase {
+	if config == nil {
+		panic("config cannot be nil")
+	}
+	if oauthGateway == nil {
+		panic("oauthGateway cannot be nil")
+	}
+	if credentialRepo == nil {
+		panic("credentialRepo cannot be nil")
+	}
+	if logger == nil {
+		panic("logger cannot be nil")
+	}
 	return &AuthUseCase{
 		config:         config,
 		oauthGateway:   oauthGateway,
@@ -194,6 +206,9 @@ func (uc *AuthUseCase) authenticateWithDeviceFlow() (*entities.Credentials, erro
 
 // GetBaseURL returns the base URL for API calls
 func (uc *AuthUseCase) GetBaseURL(credentials *entities.Credentials) (string, error) {
+	if credentials == nil {
+		return "", fmt.Errorf("credentials cannot be nil")
+	}
 	baseURL := credentials.ResourceURL
 	if baseURL == "" {
 		return "", fmt.Errorf("no resource URL available in credentials")

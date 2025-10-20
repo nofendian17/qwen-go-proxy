@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"bytes"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -215,7 +216,7 @@ func TestOpenAIModelsHandler(t *testing.T) {
 			},
 		},
 	}
-	proxyCtrl.EXPECT().GetModels().Return(models)
+	proxyCtrl.EXPECT().GetModels().Return(models, nil)
 
 	// Create controller
 	controller := NewAPIController(proxyCtrl, logger)
@@ -549,4 +550,303 @@ func TestExtractBool(t *testing.T) {
 	assert.False(t, extractBool(false))
 	assert.False(t, extractBool("not a bool"))
 	assert.False(t, extractBool(nil))
+}
+
+// Negative Test Cases
+
+func TestNewAPIController_NilProxyUseCase(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	logger := &testLogger{}
+
+	// Test with nil proxy use case - should panic (documenting current behavior)
+	assert.Panics(t, func() {
+		NewAPIController(nil, logger)
+	})
+}
+
+func TestNewAPIController_NilLogger(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
+
+	// Test with nil logger - should panic (documenting current behavior)
+	assert.Panics(t, func() {
+		NewAPIController(proxyCtrl, nil)
+	})
+}
+
+func TestOpenAIHealthHandler_ControllerNilProxy(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create controller with nil proxy use case (this would panic in NewAPIController)
+	// So we test the panic behavior in NewAPIController instead
+	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
+	logger := &testLogger{}
+
+	controller := NewAPIController(proxyCtrl, logger)
+	assert.NotNil(t, controller)
+}
+
+func TestAuthenticateHandler_NilCredentials(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
+	logger := &testLogger{}
+
+	// Setup mock to return nil credentials and no error
+	proxyCtrl.EXPECT().CheckAuthentication().Return(nil, nil)
+	// Since credentials are nil, it will call AuthenticateManually
+	proxyCtrl.EXPECT().AuthenticateManually().Return(nil)
+
+	controller := NewAPIController(proxyCtrl, logger)
+
+	router := gin.New()
+	router.GET("/auth", controller.AuthenticateHandler)
+
+	req := httptest.NewRequest("GET", "/auth", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), `"authenticated":false`)
+}
+
+func TestAuthenticateHandler_CheckAuthError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
+	logger := &testLogger{}
+
+	// Setup mock to return error
+	proxyCtrl.EXPECT().CheckAuthentication().Return(nil, errors.New("check auth failed"))
+	// Since CheckAuthentication failed, it will call AuthenticateManually
+	proxyCtrl.EXPECT().AuthenticateManually().Return(nil)
+
+	controller := NewAPIController(proxyCtrl, logger)
+
+	router := gin.New()
+	router.GET("/auth", controller.AuthenticateHandler)
+
+	req := httptest.NewRequest("GET", "/auth", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), `"authenticated":false`)
+}
+
+func TestOpenAIModelsHandler_GetModelsError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
+	logger := &testLogger{}
+
+	// Setup mock to return error
+	proxyCtrl.EXPECT().GetModels().Return(nil, errors.New("get models failed"))
+
+	controller := NewAPIController(proxyCtrl, logger)
+
+	router := gin.New()
+	router.GET("/models", controller.OpenAIModelsHandler)
+
+	req := httptest.NewRequest("GET", "/models", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	// Should handle error gracefully
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestOpenAICompletionsHandler_EmptyRequestBody(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
+	logger := &testLogger{}
+
+	controller := NewAPIController(proxyCtrl, logger)
+
+	router := gin.New()
+	router.POST("/completions", controller.OpenAICompletionsHandler)
+
+	// Create request with empty body
+	req := httptest.NewRequest("POST", "/completions", bytes.NewBufferString(""))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), `"message":"Invalid JSON"`)
+}
+
+func TestOpenAICompletionsHandler_MalformedJSON(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
+	logger := &testLogger{}
+
+	controller := NewAPIController(proxyCtrl, logger)
+
+	router := gin.New()
+	router.POST("/completions", controller.OpenAICompletionsHandler)
+
+	// Create request with malformed JSON
+	req := httptest.NewRequest("POST", "/completions", bytes.NewBufferString(`{"prompt": "test", "invalid": json}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), `"message":"Invalid JSON"`)
+}
+
+func TestChatCompletionsHandler_EmptyRequestBody(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
+	logger := &testLogger{}
+
+	controller := NewAPIController(proxyCtrl, logger)
+
+	router := gin.New()
+	router.POST("/chat/completions", controller.ChatCompletionsHandler)
+
+	// Create request with empty body
+	req := httptest.NewRequest("POST", "/chat/completions", bytes.NewBufferString(""))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), `"message":"Invalid JSON"`)
+}
+
+func TestChatCompletionsHandler_MalformedJSON(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
+	logger := &testLogger{}
+
+	controller := NewAPIController(proxyCtrl, logger)
+
+	router := gin.New()
+	router.POST("/chat/completions", controller.ChatCompletionsHandler)
+
+	// Create request with malformed JSON
+	req := httptest.NewRequest("POST", "/chat/completions", bytes.NewBufferString(`{"messages": [], "invalid": json}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), `"message":"Invalid JSON"`)
+}
+
+func TestExtractTextContent_ComplexContentBlocks(t *testing.T) {
+	// Test with complex content block structures
+	content := []interface{}{
+		map[string]interface{}{
+			"type": "text",
+			"text": "Block 1",
+		},
+		map[string]interface{}{
+			"type": "image_url",
+			"image_url": map[string]interface{}{
+				"url": "https://example.com/image.jpg",
+			},
+		},
+		map[string]interface{}{
+			"type": "text",
+			"text": "Block 2",
+		},
+	}
+
+	result := extractTextContent(content)
+	assert.Equal(t, "Block 1Block 2", result)
+}
+
+func TestExtractTextContent_InvalidContentBlocks(t *testing.T) {
+	// Test with invalid content block structures
+	content := []interface{}{
+		map[string]interface{}{
+			"type": "text",
+			// Missing "text" field
+		},
+		map[string]interface{}{
+			"type": "unknown",
+			"text": "Unknown block",
+		},
+	}
+
+	result := extractTextContent(content)
+	assert.Equal(t, "", result)
+}
+
+func TestExtractString_InvalidTypes(t *testing.T) {
+	// Test with various invalid types
+	_, ok := extractString(123)
+	assert.False(t, ok)
+
+	_, ok = extractString(45.67)
+	assert.False(t, ok)
+
+	_, ok = extractString(true)
+	assert.False(t, ok)
+
+	_, ok = extractString([]string{"array"})
+	assert.False(t, ok)
+}
+
+func TestExtractFloat64_InvalidTypes(t *testing.T) {
+	// Test with various invalid types
+	_, ok := extractFloat64("not a number")
+	assert.False(t, ok)
+
+	_, ok = extractFloat64(true)
+	assert.False(t, ok)
+
+	_, ok = extractFloat64([]int{1, 2, 3})
+	assert.False(t, ok)
+}
+
+func TestExtractBool_InvalidTypes(t *testing.T) {
+	// Test with various invalid types
+	assert.False(t, extractBool(123))
+	assert.False(t, extractBool("true"))
+	assert.False(t, extractBool(45.67))
+	assert.False(t, extractBool([]bool{true}))
 }

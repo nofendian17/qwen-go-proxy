@@ -55,6 +55,12 @@ type APIController struct {
 
 // NewAPIController creates a new API controller
 func NewAPIController(proxyUseCase proxy.ProxyUseCaseInterface, logger logging.LoggerInterface) *APIController {
+	if proxyUseCase == nil {
+		panic("proxyUseCase cannot be nil")
+	}
+	if logger == nil {
+		panic("logger cannot be nil")
+	}
 	return &APIController{
 		proxyUseCase: proxyUseCase,
 		logger:       logger,
@@ -170,7 +176,11 @@ func (ctrl *APIController) OpenAIModelsHandler(c *gin.Context) {
 	}
 	ctrl.logger.Debug("Models list requested", "request_id", requestID)
 
-	models := ctrl.proxyUseCase.GetModels()
+	models, err := ctrl.proxyUseCase.GetModels()
+	if err != nil {
+		ctrl.sendInternalError(c, err)
+		return
+	}
 	ctrl.logger.Info("Retrieved models", "request_id", requestID, "count", len(models))
 
 	// Convert to OpenAI format

@@ -86,11 +86,12 @@ func (mr *MockProxyUseCaseInterfaceMockRecorder) CheckAuthentication() *gomock.C
 }
 
 // GetModels mocks base method.
-func (m *MockProxyUseCaseInterface) GetModels() []*entities.ModelInfo {
+func (m *MockProxyUseCaseInterface) GetModels() ([]*entities.ModelInfo, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetModels")
 	ret0, _ := ret[0].([]*entities.ModelInfo)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetModels indicates an expected call of GetModels.

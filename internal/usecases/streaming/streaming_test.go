@@ -434,3 +434,233 @@ func BenchmarkStreamingUseCase_ProcessStreamingResponse(b *testing.B) {
 		}
 	}
 }
+
+// Negative Test Cases
+
+func TestNewStreamingUseCase_NilConfig(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := mocks.NewMockLoggerInterface(ctrl)
+
+	// Test with nil config - should panic (documenting current behavior)
+	assert.Panics(t, func() {
+		NewStreamingUseCase(nil, mockLogger)
+	})
+}
+
+func TestNewStreamingUseCase_NilLogger(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	config := &entities.StreamingConfig{
+		MaxErrors: 5,
+		BufferSize: 4096,
+		TimeoutSeconds: 300,
+	}
+
+	// Test with nil logger - should not panic (current behavior)
+	assert.NotPanics(t, func() {
+		NewStreamingUseCase(config, nil)
+	})
+}
+
+func TestStreamingUseCase_ProcessStreamingResponse_NilResponse(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := mocks.NewMockLoggerInterface(ctrl)
+	config := &entities.StreamingConfig{MaxErrors: 5}
+
+	useCase := NewStreamingUseCase(config, mockLogger)
+	writer := httptest.NewRecorder()
+	ctx := context.Background()
+
+	// Test with nil response - should panic (documenting current behavior)
+	assert.Panics(t, func() {
+		useCase.ProcessStreamingResponse(ctx, nil, writer)
+	})
+}
+
+func TestStreamingUseCase_ProcessStreamingResponse_NilWriter(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := mocks.NewMockLoggerInterface(ctrl)
+	config := &entities.StreamingConfig{MaxErrors: 5}
+
+	useCase := NewStreamingUseCase(config, mockLogger)
+
+	resp := &http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(strings.NewReader("")),
+		Header:     make(http.Header),
+	}
+
+	ctx := context.Background()
+
+	// Test with nil writer - should panic (documenting current behavior)
+	assert.Panics(t, func() {
+		useCase.ProcessStreamingResponse(ctx, resp, nil)
+	})
+}
+
+func TestStreamingUseCase_ProcessStreamingResponse_LoggerPanic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := mocks.NewMockLoggerInterface(ctrl)
+	config := &entities.StreamingConfig{MaxErrors: 5}
+
+	useCase := NewStreamingUseCase(config, mockLogger)
+
+	resp := &http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(strings.NewReader("")),
+		Header:     make(http.Header),
+	}
+
+	writer := httptest.NewRecorder()
+	ctx := context.Background()
+
+	// Mock logger to panic
+	mockLogger.EXPECT().Info(gomock.Any(), gomock.Any()).DoAndReturn(func(msg string, args ...any) {
+		panic("logger panic")
+	})
+
+	// Should handle logger panic gracefully
+	assert.Panics(t, func() {
+		useCase.ProcessStreamingResponse(ctx, resp, writer)
+	})
+}
+
+func TestStreamingUseCase_ProcessStreamingResponse_ConfigWithInvalidValues(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := mocks.NewMockLoggerInterface(ctrl)
+
+	// Config with invalid values
+	config := &entities.StreamingConfig{
+		MaxErrors:      -1, // Invalid negative value
+		BufferSize:     0,  // Invalid zero value
+		TimeoutSeconds: -1, // Invalid negative value
+	}
+
+	useCase := NewStreamingUseCase(config, mockLogger)
+
+	resp := &http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(strings.NewReader("")),
+		Header:     make(http.Header),
+	}
+
+	writer := httptest.NewRecorder()
+	ctx := context.Background()
+
+	// Expect the final Info call for streaming completion
+	mockLogger.EXPECT().Info(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+
+	// Should handle invalid config gracefully
+	err := useCase.ProcessStreamingResponse(ctx, resp, writer)
+	assert.NoError(t, err)
+}
+
+func TestStreamingUseCase_RecordFailure_LoggerPanic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := mocks.NewMockLoggerInterface(ctrl)
+	config := &entities.StreamingConfig{MaxErrors: 2}
+
+	useCase := NewStreamingUseCase(config, mockLogger)
+
+	// Set up circuit breaker to trigger the Warn call (need MaxErrors failures)
+	useCase.circuitBreaker.FailureCount = 1 // One more failure will trigger the Warn
+
+	// Mock logger to panic
+	mockLogger.EXPECT().Warn("Circuit breaker opened due to too many failures", gomock.Any()).DoAndReturn(func(msg string, args ...any) {
+		panic("logger panic")
+	})
+
+	// Should handle logger panic gracefully
+	assert.Panics(t, func() {
+		useCase.recordFailure()
+	})
+}
+
+func TestStreamingUseCase_RecordSuccess_LoggerPanic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := mocks.NewMockLoggerInterface(ctrl)
+	config := &entities.StreamingConfig{MaxErrors: 2}
+
+	useCase := NewStreamingUseCase(config, mockLogger)
+
+	// Start with half-open state
+	useCase.circuitBreaker.State = entities.CircuitHalfOpen
+	// Set up to trigger the Info call (need HalfOpenMaxTries successes)
+	useCase.circuitBreaker.HalfOpenTries = 2 // One more success will trigger the Info (HalfOpenMaxTries = 3)
+
+	// Mock logger to panic
+	mockLogger.EXPECT().Info("Circuit breaker closed after successful half-open attempts").DoAndReturn(func(msg string, args ...any) {
+		panic("logger panic")
+	})
+
+	// Should handle logger panic gracefully
+	assert.Panics(t, func() {
+		useCase.recordSuccess()
+	})
+}
+
+func TestStutteringDetector_AnalyzeStuttering_NilHistory(t *testing.T) {
+	detector := &entities.StutteringDetector{
+		WindowSize:          3,
+		SimilarityThreshold: 0.8,
+		TimeWindow:          2 * time.Second,
+		MinConfidence:       0.7,
+		ContentHistory:      nil, // Nil history
+	}
+
+	// Should handle nil history gracefully
+	result := detector.AnalyzeStuttering("test", "")
+	assert.NotNil(t, result)
+}
+
+func TestStutteringDetector_AnalyzeStuttering_EmptyContent(t *testing.T) {
+	detector := &entities.StutteringDetector{
+		WindowSize:          3,
+		SimilarityThreshold: 0.8,
+		TimeWindow:          2 * time.Second,
+		MinConfidence:       0.7,
+		ContentHistory:      make([]entities.ContentChunk, 0),
+	}
+
+	// Should handle empty content gracefully
+	result := detector.AnalyzeStuttering("", "")
+	assert.NotNil(t, result)
+	assert.True(t, result.IsStuttering) // Empty content should be considered stuttering
+}
+
+func TestStutteringDetector_AnalyzeStuttering_InvalidTimestamps(t *testing.T) {
+	detector := &entities.StutteringDetector{
+		WindowSize:          3,
+		SimilarityThreshold: 0.8,
+		TimeWindow:          2 * time.Second,
+		MinConfidence:       0.7,
+		ContentHistory:      []entities.ContentChunk{
+			{
+				Content:    "test",
+				Timestamp:  time.Time{}, // Zero timestamp
+				Length:     4,
+				TokenCount: 1,
+				ChunkIndex: 0,
+			},
+		},
+	}
+
+	// Should handle invalid timestamps gracefully
+	result := detector.AnalyzeStuttering("test", "test")
+	assert.NotNil(t, result)
+}

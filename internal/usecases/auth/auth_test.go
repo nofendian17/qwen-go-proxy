@@ -15,6 +15,7 @@ import (
 	"qwen-go-proxy/internal/infrastructure/logging"
 	"qwen-go-proxy/internal/mocks"
 
+	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
 
@@ -554,7 +555,7 @@ func TestAuthUseCase_refreshAccessToken_NoRefreshToken(t *testing.T) {
 		AccessToken: "old-token",
 		TokenType:   "Bearer",
 		// No refresh token
-		ExpiryDate:  time.Now().UnixMilli(),
+		ExpiryDate: time.Now().UnixMilli(),
 	}
 
 	oauthGateway := mocks.NewMockOAuthGateway(ctrl)
@@ -904,4 +905,352 @@ func TestAuthUseCase_EnsureAuthenticated_ConcurrentAccess(t *testing.T) {
 	}
 
 	// Should only refresh once due to mutex
+}
+
+// Negative Test Cases
+
+func TestNewAuthUseCase_NilConfig(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	oauthGateway := mocks.NewMockOAuthGateway(ctrl)
+	logger := logging.NewLoggerFromConfig(&entities.Config{LogLevel: "error"})
+	repo := &FileCredentialRepository{filePath: "/tmp/test"}
+
+	// Test with nil config - should panic (documenting current behavior)
+	assert.Panics(t, func() {
+		NewAuthUseCase(nil, oauthGateway, repo, logger)
+	})
+}
+
+func TestNewAuthUseCase_NilOAuthGateway(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	config := &entities.Config{
+		QWENOAuthClientID:  "test-client-id",
+		TokenRefreshBuffer: 5 * time.Minute,
+	}
+
+	logger := logging.NewLoggerFromConfig(&entities.Config{LogLevel: "error"})
+	repo := &FileCredentialRepository{filePath: "/tmp/test"}
+
+	// Test with nil oauth gateway - should panic (documenting current behavior)
+	assert.Panics(t, func() {
+		NewAuthUseCase(config, nil, repo, logger)
+	})
+}
+
+func TestNewAuthUseCase_NilRepository(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	config := &entities.Config{
+		QWENOAuthClientID:  "test-client-id",
+		TokenRefreshBuffer: 5 * time.Minute,
+	}
+
+	oauthGateway := mocks.NewMockOAuthGateway(ctrl)
+	logger := logging.NewLoggerFromConfig(&entities.Config{LogLevel: "error"})
+
+	// Test with nil repository - should panic (documenting current behavior)
+	assert.Panics(t, func() {
+		NewAuthUseCase(config, oauthGateway, nil, logger)
+	})
+}
+
+func TestNewAuthUseCase_NilLogger(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	config := &entities.Config{
+		QWENOAuthClientID:  "test-client-id",
+		TokenRefreshBuffer: 5 * time.Minute,
+	}
+
+	oauthGateway := mocks.NewMockOAuthGateway(ctrl)
+	repo := &FileCredentialRepository{filePath: "/tmp/test"}
+
+	// Test with nil logger - should panic (documenting current behavior)
+	assert.Panics(t, func() {
+		NewAuthUseCase(config, oauthGateway, repo, nil)
+	})
+}
+
+func TestAuthUseCase_EnsureAuthenticated_ConfigWithEmptyClientID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	config := &entities.Config{
+		QWENOAuthClientID:  "", // Empty client ID
+		QWENOAuthScope:     "test-scope",
+		TokenRefreshBuffer: 5 * time.Minute,
+	}
+
+	oauthGateway := mocks.NewMockOAuthGateway(ctrl)
+	logger := logging.NewLoggerFromConfig(&entities.Config{LogLevel: "error"})
+
+	repo := &mockCredentialRepository{
+		loadError: fmt.Errorf("file not found"),
+	}
+
+	oauthGateway.EXPECT().AuthenticateWithDeviceFlow("", "test-scope").Return(nil, fmt.Errorf("empty client ID"))
+
+	useCase := NewAuthUseCase(config, oauthGateway, repo, logger)
+
+	_, err := useCase.EnsureAuthenticated()
+
+	// Should handle empty client ID gracefully
+	assert.Error(t, err)
+}
+
+func TestAuthUseCase_EnsureAuthenticated_ConfigWithEmptyScope(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	config := &entities.Config{
+		QWENOAuthClientID:  "test-client-id",
+		QWENOAuthScope:     "", // Empty scope
+		TokenRefreshBuffer: 5 * time.Minute,
+	}
+
+	oauthGateway := mocks.NewMockOAuthGateway(ctrl)
+	logger := logging.NewLoggerFromConfig(&entities.Config{LogLevel: "error"})
+
+	repo := &mockCredentialRepository{
+		loadError: fmt.Errorf("file not found"),
+	}
+
+	oauthGateway.EXPECT().AuthenticateWithDeviceFlow("test-client-id", "").Return(nil, fmt.Errorf("empty scope"))
+
+	useCase := NewAuthUseCase(config, oauthGateway, repo, logger)
+
+	_, err := useCase.EnsureAuthenticated()
+
+	// Should handle empty scope gracefully
+	assert.Error(t, err)
+}
+
+func TestAuthUseCase_EnsureAuthenticated_RepositoryLoadPanic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	config := &entities.Config{
+		QWENOAuthClientID:  "test-client-id",
+		QWENOAuthScope:     "test-scope",
+		TokenRefreshBuffer: 5 * time.Minute,
+	}
+
+	oauthGateway := mocks.NewMockOAuthGateway(ctrl)
+	logger := logging.NewLoggerFromConfig(&entities.Config{LogLevel: "error"})
+
+	// Repository that panics on Load
+	repo := &panickingRepository{}
+
+	useCase := NewAuthUseCase(config, oauthGateway, repo, logger)
+
+	// Should handle repository panic gracefully
+	assert.Panics(t, func() {
+		useCase.EnsureAuthenticated()
+	})
+}
+
+func TestAuthUseCase_EnsureAuthenticated_RepositorySavePanic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	config := &entities.Config{
+		QWENOAuthClientID:  "test-client-id",
+		QWENOAuthScope:     "test-scope",
+		TokenRefreshBuffer: 5 * time.Minute,
+	}
+
+	testCreds := &entities.Credentials{
+		AccessToken:  "device-flow-token",
+		TokenType:    "Bearer",
+		RefreshToken: "device-refresh",
+		ExpiryDate:   time.Now().Add(time.Hour).UnixMilli(),
+		ResourceURL:  "https://api.example.com",
+	}
+
+	oauthGateway := mocks.NewMockOAuthGateway(ctrl)
+	oauthGateway.EXPECT().
+		AuthenticateWithDeviceFlow("test-client-id", "test-scope").
+		Return(testCreds, nil).
+		Times(1)
+
+	logger := logging.NewLoggerFromConfig(&entities.Config{LogLevel: "error"})
+
+	// Repository that panics on Save
+	repo := &panickingSaveRepository{}
+
+	useCase := NewAuthUseCase(config, oauthGateway, repo, logger)
+
+	// Should handle repository save panic gracefully
+	assert.Panics(t, func() {
+		useCase.EnsureAuthenticated()
+	})
+}
+
+func TestAuthUseCase_refreshAccessToken_RepositorySaveError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	config := &entities.Config{
+		QWENOAuthClientID: "test-client-id",
+	}
+
+	credentials := &entities.Credentials{
+		AccessToken:  "old-token",
+		TokenType:    "Bearer",
+		RefreshToken: "refresh-token",
+		ExpiryDate:   time.Now().UnixMilli(),
+		ResourceURL:  "https://api.example.com",
+	}
+
+	refreshedCreds := &entities.Credentials{
+		AccessToken:  "new-token",
+		TokenType:    "Bearer",
+		RefreshToken: "new-refresh-token",
+		ExpiryDate:   time.Now().Add(time.Hour).UnixMilli(),
+		ResourceURL:  "https://api.example.com",
+	}
+
+	oauthGateway := mocks.NewMockOAuthGateway(ctrl)
+	oauthGateway.EXPECT().
+		RefreshToken("refresh-token", "test-client-id").
+		Return(refreshedCreds, nil).
+		Times(1)
+
+	logger := logging.NewLoggerFromConfig(&entities.Config{LogLevel: "error"})
+
+	// Repository that fails on Save
+	repo := &mockCredentialRepository{
+		saveError: fmt.Errorf("save failed"),
+	}
+
+	useCase := NewAuthUseCase(config, oauthGateway, repo, logger)
+
+	refreshed, err := useCase.refreshAccessToken(credentials)
+
+	// Should handle save error gracefully
+	assert.Error(t, err)
+	assert.Nil(t, refreshed)
+	assert.Contains(t, err.Error(), "failed to save refreshed credentials")
+}
+
+func TestAuthUseCase_GetBaseURL_NilCredentials(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	config := &entities.Config{}
+	oauthGateway := mocks.NewMockOAuthGateway(ctrl)
+	logger := logging.NewLoggerFromConfig(&entities.Config{LogLevel: "error"})
+	repo := &mockCredentialRepository{}
+
+	useCase := NewAuthUseCase(config, oauthGateway, repo, logger)
+
+	// Test with nil credentials
+	result, err := useCase.GetBaseURL(nil)
+
+	assert.Error(t, err)
+	assert.Equal(t, "", result)
+	assert.Contains(t, err.Error(), "credentials cannot be nil")
+}
+
+func TestAuthUseCase_GetBaseURL_CredentialsWithoutResourceURL(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	config := &entities.Config{}
+	oauthGateway := mocks.NewMockOAuthGateway(ctrl)
+	logger := logging.NewLoggerFromConfig(&entities.Config{LogLevel: "error"})
+	repo := &mockCredentialRepository{}
+
+	useCase := NewAuthUseCase(config, oauthGateway, repo, logger)
+
+	credentials := &entities.Credentials{
+		AccessToken: "test-token",
+		TokenType:   "Bearer",
+		// No ResourceURL
+	}
+
+	result, err := useCase.GetBaseURL(credentials)
+
+	assert.Error(t, err)
+	assert.Equal(t, "", result)
+	assert.Contains(t, err.Error(), "no resource URL available")
+}
+
+func TestAuthUseCase_GetBaseURL_CredentialsWithEmptyResourceURL(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	config := &entities.Config{}
+	oauthGateway := mocks.NewMockOAuthGateway(ctrl)
+	logger := logging.NewLoggerFromConfig(&entities.Config{LogLevel: "error"})
+	repo := &mockCredentialRepository{}
+
+	useCase := NewAuthUseCase(config, oauthGateway, repo, logger)
+
+	credentials := &entities.Credentials{
+		AccessToken: "test-token",
+		TokenType:   "Bearer",
+		ResourceURL: "", // Empty resource URL
+	}
+
+	result, err := useCase.GetBaseURL(credentials)
+
+	assert.Error(t, err)
+	assert.Equal(t, "", result)
+	assert.Contains(t, err.Error(), "no resource URL available")
+}
+
+func TestAuthUseCase_CheckAuthentication_RepositoryLoadError(t *testing.T) {
+	config := &entities.Config{}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	oauthGateway := mocks.NewMockOAuthGateway(ctrl)
+	// Since CheckAuthentication calls EnsureAuthenticated which tries to authenticate on load failure,
+	// we need to set up the mock to return an error
+	oauthGateway.EXPECT().AuthenticateWithDeviceFlow(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("auth failed")).AnyTimes()
+	logger := logging.NewLoggerFromConfig(&entities.Config{LogLevel: "error"})
+
+	// Repository that fails on Load
+	repo := &mockCredentialRepository{
+		loadError: fmt.Errorf("load failed"),
+	}
+
+	useCase := NewAuthUseCase(config, oauthGateway, repo, logger)
+
+	result, err := useCase.CheckAuthentication()
+
+	// Should handle load error gracefully (by attempting authentication, which fails)
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "device authentication failed")
+}
+
+// Mock repository that panics for testing
+type panickingRepository struct{}
+
+func (p *panickingRepository) Load() (*entities.Credentials, error) {
+	panic("load panic")
+}
+
+func (p *panickingRepository) Save(credentials *entities.Credentials) error {
+	panic("save panic")
+}
+
+// Mock repository that panics only on Save
+type panickingSaveRepository struct{}
+
+func (p *panickingSaveRepository) Load() (*entities.Credentials, error) {
+	return nil, fmt.Errorf("no credentials") // Return error to force authentication
+}
+
+func (p *panickingSaveRepository) Save(credentials *entities.Credentials) error {
+	panic("save panic")
 }

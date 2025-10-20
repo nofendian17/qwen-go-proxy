@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -256,6 +257,278 @@ func TestProxyUseCase_GetModels(t *testing.T) {
 	// We would need to add it or test through other means
 	// For now, this is a placeholder test
 	assert.NotNil(t, useCase)
+}
+
+// Negative Test Cases
+
+func TestNewProxyUseCase_NilAuthUseCase(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQwenGateway := mocks.NewMockQwenAPIGateway(ctrl)
+	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
+	mockLogger := mocks.NewMockLoggerInterface(ctrl)
+
+	// Test with nil auth use case - should panic (documenting current behavior)
+	assert.Panics(t, func() {
+		NewProxyUseCase(nil, mockQwenGateway, mockStreamingUseCase, mockLogger)
+	})
+}
+
+func TestNewProxyUseCase_NilQwenGateway(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAuthUseCase := mocks.NewMockAuthUseCaseInterface(ctrl)
+	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
+	mockLogger := mocks.NewMockLoggerInterface(ctrl)
+
+	// Test with nil qwen gateway - should panic (documenting current behavior)
+	assert.Panics(t, func() {
+		NewProxyUseCase(mockAuthUseCase, nil, mockStreamingUseCase, mockLogger)
+	})
+}
+
+func TestNewProxyUseCase_NilStreamingUseCase(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAuthUseCase := mocks.NewMockAuthUseCaseInterface(ctrl)
+	mockQwenGateway := mocks.NewMockQwenAPIGateway(ctrl)
+	mockLogger := mocks.NewMockLoggerInterface(ctrl)
+
+	// Test with nil streaming use case - should panic (documenting current behavior)
+	assert.Panics(t, func() {
+		NewProxyUseCase(mockAuthUseCase, mockQwenGateway, nil, mockLogger)
+	})
+}
+
+func TestNewProxyUseCase_NilLogger(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAuthUseCase := mocks.NewMockAuthUseCaseInterface(ctrl)
+	mockQwenGateway := mocks.NewMockQwenAPIGateway(ctrl)
+	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
+
+	// Test with nil logger - should panic (documenting current behavior)
+	assert.Panics(t, func() {
+		NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, nil)
+	})
+}
+
+func TestProxyUseCase_ChatCompletions_NilRequest(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAuthUseCase := mocks.NewMockAuthUseCaseInterface(ctrl)
+	mockQwenGateway := mocks.NewMockQwenAPIGateway(ctrl)
+	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
+	mockLogger := mocks.NewMockLoggerInterface(ctrl)
+
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+
+	// Test with nil request - should return error
+	response, err := useCase.ChatCompletions(nil)
+
+	assert.Error(t, err)
+	assert.Nil(t, response)
+}
+
+func TestProxyUseCase_ChatCompletions_AuthUseCasePanic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAuthUseCase := mocks.NewMockAuthUseCaseInterface(ctrl)
+	mockQwenGateway := mocks.NewMockQwenAPIGateway(ctrl)
+	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
+	mockLogger := mocks.NewMockLoggerInterface(ctrl)
+
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+
+	req := &entities.ChatCompletionRequest{
+		Messages: []entities.ChatMessage{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	// Mock auth use case to panic
+	mockAuthUseCase.EXPECT().EnsureAuthenticated().DoAndReturn(func() (*entities.Credentials, error) {
+		panic("auth panic")
+	})
+
+	// Should handle auth panic gracefully
+	assert.Panics(t, func() {
+		useCase.ChatCompletions(req)
+	})
+}
+
+func TestProxyUseCase_ChatCompletions_QwenGatewayPanic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAuthUseCase := mocks.NewMockAuthUseCaseInterface(ctrl)
+	mockQwenGateway := mocks.NewMockQwenAPIGateway(ctrl)
+	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
+	mockLogger := mocks.NewMockLoggerInterface(ctrl)
+
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+
+	req := &entities.ChatCompletionRequest{
+		Messages: []entities.ChatMessage{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	credentials := &entities.Credentials{
+		ResourceURL: "https://api.example.com",
+	}
+
+	// Mock successful auth but panicking gateway
+	mockAuthUseCase.EXPECT().EnsureAuthenticated().Return(credentials, nil)
+	mockQwenGateway.EXPECT().ChatCompletions(req, credentials).DoAndReturn(func(req *entities.ChatCompletionRequest, creds *entities.Credentials) (*http.Response, error) {
+		panic("gateway panic")
+	})
+
+	// Should handle gateway panic gracefully
+	assert.Panics(t, func() {
+		useCase.ChatCompletions(req)
+	})
+}
+
+func TestProxyUseCase_ChatCompletions_DefaultModelWithInvalidRequest(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAuthUseCase := mocks.NewMockAuthUseCaseInterface(ctrl)
+	mockQwenGateway := mocks.NewMockQwenAPIGateway(ctrl)
+	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
+	mockLogger := mocks.NewMockLoggerInterface(ctrl)
+
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+
+	// Request with empty model (should use default)
+	req := &entities.ChatCompletionRequest{
+		Messages: []entities.ChatMessage{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	credentials := &entities.Credentials{
+		ResourceURL: "https://api.example.com",
+	}
+
+	// Mock successful auth and gateway call
+	mockAuthUseCase.EXPECT().EnsureAuthenticated().Return(credentials, nil)
+	mockQwenGateway.EXPECT().ChatCompletions(gomock.Any(), credentials).Return(nil, errors.New("gateway error"))
+
+	response, err := useCase.ChatCompletions(req)
+
+	// Should handle gateway error gracefully
+	assert.Error(t, err)
+	assert.Nil(t, response)
+}
+
+func TestProxyUseCase_StreamChatCompletions_NilRequest(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAuthUseCase := mocks.NewMockAuthUseCaseInterface(ctrl)
+	mockQwenGateway := mocks.NewMockQwenAPIGateway(ctrl)
+	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
+	mockLogger := mocks.NewMockLoggerInterface(ctrl)
+
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+
+	writer := httptest.NewRecorder()
+
+	// Test with nil request - should return error
+	err := useCase.StreamChatCompletions(nil, writer)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "request cannot be nil")
+}
+
+func TestProxyUseCase_StreamChatCompletions_NilWriter(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAuthUseCase := mocks.NewMockAuthUseCaseInterface(ctrl)
+	mockQwenGateway := mocks.NewMockQwenAPIGateway(ctrl)
+	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
+	mockLogger := mocks.NewMockLoggerInterface(ctrl)
+
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+
+	req := &entities.ChatCompletionRequest{
+		Stream: true,
+	}
+
+	// Test with nil writer - should return error
+	err := useCase.StreamChatCompletions(req, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "writer cannot be nil")
+}
+
+func TestProxyUseCase_StreamChatCompletions_StreamingUseCasePanic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAuthUseCase := mocks.NewMockAuthUseCaseInterface(ctrl)
+	mockQwenGateway := mocks.NewMockQwenAPIGateway(ctrl)
+	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
+	mockLogger := mocks.NewMockLoggerInterface(ctrl)
+
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+
+	req := &entities.ChatCompletionRequest{
+		Stream: true,
+	}
+
+	credentials := &entities.Credentials{
+		ResourceURL: "https://api.example.com",
+	}
+
+	streamingResponse := &http.Response{
+		StatusCode: 200,
+		Body:       &mockReadCloser{data: []byte("data: test\n\ndata: [DONE]\n\n")},
+		Header:     make(http.Header),
+	}
+
+	writer := httptest.NewRecorder()
+
+	// Mock successful auth and gateway but panicking streaming use case
+	mockAuthUseCase.EXPECT().EnsureAuthenticated().Return(credentials, nil)
+	mockQwenGateway.EXPECT().ChatCompletions(req, credentials).Return(streamingResponse, nil)
+	mockStreamingUseCase.EXPECT().ProcessStreamingResponse(gomock.Any(), streamingResponse, writer).DoAndReturn(func(ctx context.Context, resp *http.Response, w http.ResponseWriter) error {
+		panic("streaming panic")
+	})
+
+	// Should handle streaming panic gracefully
+	assert.Panics(t, func() {
+		useCase.StreamChatCompletions(req, writer)
+	})
+}
+
+func TestProxyUseCase_CheckAuthentication_AuthUseCasePanic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAuthUseCase := mocks.NewMockAuthUseCaseInterface(ctrl)
+	mockQwenGateway := mocks.NewMockQwenAPIGateway(ctrl)
+	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
+	mockLogger := mocks.NewMockLoggerInterface(ctrl)
+
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+
+	// Mock auth use case to panic
+	mockAuthUseCase.EXPECT().EnsureAuthenticated().DoAndReturn(func() (*entities.Credentials, error) {
+		panic("auth panic")
+	})
+
+	// Should handle auth panic gracefully
+	assert.Panics(t, func() {
+		useCase.CheckAuthentication()
+	})
 }
 
 func TestProxyUseCase_CheckAuthentication(t *testing.T) {

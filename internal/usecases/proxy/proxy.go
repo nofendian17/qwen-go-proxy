@@ -18,7 +18,7 @@ import (
 type ProxyUseCaseInterface interface {
 	ChatCompletions(req *entities.ChatCompletionRequest) (*entities.ChatCompletionResponse, error)
 	StreamChatCompletions(req *entities.ChatCompletionRequest, writer http.ResponseWriter) error
-	GetModels() []*entities.ModelInfo
+	GetModels() ([]*entities.ModelInfo, error)
 	AuthenticateManually() error
 	CheckAuthentication() (*entities.Credentials, error)
 }
@@ -34,6 +34,18 @@ type ProxyUseCase struct {
 
 // NewProxyUseCase creates a new proxy use case
 func NewProxyUseCase(authUseCase auth.AuthUseCaseInterface, qwenGateway gateways.QwenAPIGateway, streamingUseCase streaming.StreamingUseCaseInterface, logger logging.LoggerInterface) *ProxyUseCase {
+	if authUseCase == nil {
+		panic("authUseCase cannot be nil")
+	}
+	if qwenGateway == nil {
+		panic("qwenGateway cannot be nil")
+	}
+	if streamingUseCase == nil {
+		panic("streamingUseCase cannot be nil")
+	}
+	if logger == nil {
+		panic("logger cannot be nil")
+	}
 	return &ProxyUseCase{
 		authUseCase:      authUseCase,
 		qwenGateway:      qwenGateway,
@@ -45,6 +57,9 @@ func NewProxyUseCase(authUseCase auth.AuthUseCaseInterface, qwenGateway gateways
 
 // ChatCompletions handles chat completion requests
 func (uc *ProxyUseCase) ChatCompletions(req *entities.ChatCompletionRequest) (*entities.ChatCompletionResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("request cannot be nil")
+	}
 	credentials, err := uc.authUseCase.EnsureAuthenticated()
 	if err != nil {
 		return nil, fmt.Errorf("authentication failed: %w", err)
@@ -96,6 +111,12 @@ func (uc *ProxyUseCase) ChatCompletions(req *entities.ChatCompletionRequest) (*e
 
 // StreamChatCompletions handles streaming chat completion requests with advanced features
 func (uc *ProxyUseCase) StreamChatCompletions(req *entities.ChatCompletionRequest, writer http.ResponseWriter) error {
+	if req == nil {
+		return fmt.Errorf("request cannot be nil")
+	}
+	if writer == nil {
+		return fmt.Errorf("writer cannot be nil")
+	}
 	credentials, err := uc.authUseCase.EnsureAuthenticated()
 	if err != nil {
 		return fmt.Errorf("authentication failed: %w", err)
@@ -173,7 +194,7 @@ func (uc *ProxyUseCase) convertQwenToOpenAIResponse(response *entities.ChatCompl
 }
 
 // GetModels returns available models
-func (uc *ProxyUseCase) GetModels() []*entities.ModelInfo {
+func (uc *ProxyUseCase) GetModels() ([]*entities.ModelInfo, error) {
 	return []*entities.ModelInfo{
 		{
 			ID:      "qwen3-coder-plus",
@@ -241,7 +262,7 @@ func (uc *ProxyUseCase) GetModels() []*entities.ModelInfo {
 				},
 			},
 		},
-	}
+	}, nil
 }
 
 // AuthenticateManually triggers manual OAuth2 device flow authentication

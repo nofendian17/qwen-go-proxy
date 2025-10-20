@@ -21,7 +21,7 @@ authentication and AI capabilities.
 
 ### System Requirements
 
-- **Go**: 1.24.8 or later (for building from source)
+- **Go**: 1.24 or later (for building from source)
 - **Docker**: Latest version (for containerized deployment)
 - **Operating System**: Linux, macOS, or Windows with WSL2
 
@@ -67,11 +67,11 @@ authentication and AI capabilities.
 
 ### Option 2: Build from Source
 
-1. **Install Go 1.24.8+**:
+1. **Install Go 1.24+**:
    ```bash
    # On Ubuntu/Debian
-   wget https://go.dev/dl/go1.24.8.linux-amd64.tar.gz
-   sudo tar -C /usr/local -xzf go1.24.8.linux-amd64.tar.gz
+   wget https://go.dev/dl/go1.24.0.linux-amd64.tar.gz
+   sudo tar -C /usr/local -xzf go1.24.0.linux-amd64.tar.gz
    export PATH=$PATH:/usr/local/go/bin
    ```
 
@@ -126,23 +126,36 @@ All API responses include:
 
 All configuration is done via environment variables:
 
-| Variable              | Default               | Description |
-|-----------------------|-----------------------|-------------|
-| `SERVER_HOST`         | `0.0.0.0`             | Server bind address |
-| `SERVER_PORT`         | `8080`                | Server port |
-| `LOG_LEVEL`           | `info`                | Logging level (debug, info, warn, error) |
-| `DEBUG_MODE`          | `false`               | Enable debug mode with enhanced logging |
-| `RATE_LIMIT_RPS`      | `10`                  | Requests per second limit |
-| `RATE_LIMIT_BURST`    | `20`                  | Burst capacity for rate limiting |
-| `QWEN_DIR`            | `.qwen`               | Directory for credential storage |
-| `READ_TIMEOUT`        | `30s`                 | HTTP read timeout |
-| `WRITE_TIMEOUT`       | `30s`                 | HTTP write timeout |
-| `SHUTDOWN_TIMEOUT`    | `30s`                 | Graceful shutdown timeout |
-| `ENABLE_TLS`          | `false`               | Enable TLS/HTTPS support |
-| `TLS_CERT_FILE`       | ``                    | Path to TLS certificate file |
-| `TLS_KEY_FILE`        | ``                    | Path to TLS private key file |
-| `TRUSTED_PROXIES`     | ``                    | Comma-separated list of trusted proxy IPs |
-| `TOKEN_REFRESH_BUFFER`| `5m`                  | Token refresh buffer time |
+| Variable                      | Default                                     | Description |
+|-------------------------------|---------------------------------------------|-------------|
+| `SERVER_HOST`                 | `0.0.0.0`                                   | Server bind address |
+| `SERVER_PORT`                 | `8080`                                      | Server port |
+| `LOG_LEVEL`                   | `info`                                      | Logging level (debug, info, warn, error) |
+| `LOG_FORMAT`                  | `json`                                      | Logging format (json, text) |
+| `DEBUG_MODE`                  | `false`                                     | Enable debug mode with enhanced logging |
+| `RATE_LIMIT_RPS`              | `10`                                        | Requests per second limit |
+| `RATE_LIMIT_BURST`            | `20`                                        | Burst capacity for rate limiting |
+| `QWEN_DIR`                    | `.qwen`                                     | Directory for credential storage |
+| `READ_TIMEOUT`                | `30s`                                       | HTTP read timeout |
+| `WRITE_TIMEOUT`               | `30s`                                       | HTTP write timeout |
+| `SHUTDOWN_TIMEOUT`            | `30s`                                       | Graceful shutdown timeout |
+| `ENABLE_TLS`                  | `false`                                     | Enable TLS/HTTPS support |
+| `TLS_CERT_FILE`               | ``                                          | Path to TLS certificate file |
+| `TLS_KEY_FILE`                | ``                                          | Path to TLS private key file |
+| `TRUSTED_PROXIES`             | ``                                          | Comma-separated list of trusted proxy IPs |
+| `TOKEN_REFRESH_BUFFER`        | `5m`                                        | Token refresh buffer time |
+| `QWEN_OAUTH_BASE_URL`         | `https://chat.qwen.ai`                      | Base URL for Qwen OAuth |
+| `QWEN_OAUTH_CLIENT_ID`        | `f0304373b74a44d2b584a3fb70ca9e56`         | Qwen OAuth client ID |
+| `QWEN_OAUTH_SCOPE`            | `openid profile email model.completion`     | Qwen OAuth scope |
+| `QWEN_OAUTH_DEVICE_AUTH_URL`  | `https://chat.qwen.ai/api/v1/oauth2/device/code` | Device authorization URL |
+| `API_BASE_URL`                | `https://portal.qwen.ai/v1`                 | Base URL for Qwen API |
+| `STREAMING_MAX_ERRORS`        | `10`                                        | Maximum streaming errors before failure |
+| `STREAMING_BUFFER_SIZE`       | `4096`                                      | Streaming buffer size in bytes |
+| `STREAMING_TIMEOUT_SECONDS`   | `900`                                       | Streaming timeout in seconds |
+| `STREAMING_WINDOW_SIZE`       | `5`                                         | Streaming analysis window size |
+| `STREAMING_SIMILARITY_THRESHOLD` | `0.8`                                    | Streaming similarity threshold for stuttering detection |
+| `STREAMING_TIME_WINDOW`       | `2s`                                        | Streaming time window for analysis |
+| `STREAMING_MIN_CONFIDENCE`    | `0.7`                                       | Minimum confidence for streaming decisions |
 
 **Note**: `TRUSTED_PROXIES` supports comma-separated values with automatic whitespace trimming (e.g., `"127.0.0.1, 192.168.1.1, 10.0.0.1"`).
 

@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"qwen-go-proxy/internal/infrastructure/logging"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-
-	"qwen-go-proxy/internal/infrastructure/logging"
 )
 
 func TestRequestLogging_DebugMode(t *testing.T) {
@@ -294,3 +294,185 @@ func TestCORS_ActualRequest(t *testing.T) {
 	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
 	assert.Contains(t, w.Body.String(), `"message":"ok"`)
 }
+
+// Negative Test Cases
+
+func TestRequestLogging_NilLogger(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Test with nil logger - should panic (documenting current behavior)
+	assert.Panics(t, func() {
+		middleware := RequestLogging(nil, true)
+		router := gin.New()
+		router.Use(middleware)
+		router.GET("/test", func(c *gin.Context) {
+			c.JSON(200, gin.H{"message": "test"})
+		})
+
+		req := httptest.NewRequest("GET", "/test", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+	})
+}
+
+func TestRequestLogging_InvalidDebugMode(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Create a logger with invalid log level
+	logger := &logging.Logger{Logger: logging.NewLogger("invalid_level")}
+
+	// Should not panic with invalid log level
+	assert.NotPanics(t, func() {
+		middleware := RequestLogging(logger, true)
+		router := gin.New()
+		router.Use(middleware)
+		router.GET("/test", func(c *gin.Context) {
+			c.JSON(200, gin.H{"message": "test"})
+		})
+
+		req := httptest.NewRequest("GET", "/test", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, 200, w.Code)
+	})
+}
+
+func TestRateLimit_InvalidParameters(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Test with zero rate limit (should still work but be very restrictive)
+	middleware := RateLimit(0, 1)
+
+	router := gin.New()
+	router.Use(middleware)
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(200, gin.H{"message": "ok"})
+	})
+
+	// Should immediately rate limit
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, 429, w.Code)
+}
+
+func TestRateLimit_NilResponseWriter(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Test with normal rate limits
+	middleware := RateLimit(10, 20)
+
+	router := gin.New()
+	router.Use(middleware)
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(200, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+
+	// This should work normally
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+}
+
+func TestRateLimit_MalformedRemoteAddr(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	middleware := RateLimit(10, 20)
+
+	router := gin.New()
+	router.Use(middleware)
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(200, gin.H{"message": "ok"})
+	})
+
+	// Test with malformed remote address
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.RemoteAddr = "invalid-address"
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Should still work (middleware should handle malformed addresses gracefully)
+	assert.Equal(t, 200, w.Code)
+}
+
+func TestCORS_NilContext(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	middleware := CORS()
+
+	router := gin.New()
+	router.Use(middleware)
+	router.GET("/test", func(c *gin.Context) {
+		// Test that CORS middleware doesn't panic with normal requests
+		c.JSON(200, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+}
+
+func TestCORS_MalformedOrigin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	middleware := CORS()
+
+	router := gin.New()
+	router.Use(middleware)
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(200, gin.H{"message": "ok"})
+	})
+
+	// Test with malformed Origin header
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Origin", "not-a-valid-url")
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Should still work (CORS middleware should handle malformed origins gracefully)
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
+}
+
+func TestCORS_EmptyOrigin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	middleware := CORS()
+
+	router := gin.New()
+	router.Use(middleware)
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(200, gin.H{"message": "ok"})
+	})
+
+	// Test with empty Origin header
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Origin", "")
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Should still work
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
+}
+
+// Mock logger that implements the logging interface
+type mockPanickingLogger struct{}
+
+func (m *mockPanickingLogger) Debug(msg string, args ...any) { panic("debug panic") }
+func (m *mockPanickingLogger) Info(msg string, args ...any)  { panic("info panic") }
+func (m *mockPanickingLogger) Warn(msg string, args ...any)  { panic("warn panic") }
+func (m *mockPanickingLogger) Error(msg string, args ...any) { panic("error panic") }

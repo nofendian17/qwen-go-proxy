@@ -64,11 +64,11 @@ type Config struct {
 	// Qwen OAuth configuration
 	QWENOAuthBaseURL       string `json:"qwen_oauth_base_url" env:"QWEN_OAUTH_BASE_URL" env-required:"true"`
 	QWENOAuthClientID      string `json:"qwen_oauth_client_id" env:"QWEN_OAUTH_CLIENT_ID" env-required:"true"`
-	QWENOAuthScope         string `json:"qwen_oauth_scope" env:"QWEN_OAUTH_SCOPE" env-default:"user:read"`
+	QWENOAuthScope         string `json:"qwen_oauth_scope" env:"QWEN_OAUTH_SCOPE" env-default:"openid profile email model.completion"`
 	QWENOAuthDeviceAuthURL string `json:"qwen_oauth_device_auth_url" env:"QWEN_OAUTH_DEVICE_AUTH_URL" env-required:"true"`
 
 	// Storage and file paths
-	QWENDir string `json:"qwen_dir" env:"QWEN_DIR" env-default:"./data"`
+	QWENDir string `json:"qwen_dir" env:"QWEN_DIR" env-default:".qwen"`
 
 	// Token management
 	TokenRefreshBuffer time.Duration `json:"token_refresh_buffer" env:"TOKEN_REFRESH_BUFFER" env-default:"5m"`

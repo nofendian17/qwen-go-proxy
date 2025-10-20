@@ -198,3 +198,111 @@ func TestLogger_VariousArguments(t *testing.T) {
 	assert.Contains(t, output, "bool=true")
 	assert.Contains(t, output, "float=3.14")
 }
+
+// Negative Test Cases
+
+func TestNewLogger_NilConfig(t *testing.T) {
+	assert.Panics(t, func() {
+		NewLoggerFromConfig(nil)
+	})
+}
+
+func TestLogger_NilReceiver(t *testing.T) {
+	var logger *Logger
+
+	// Test that methods panic with nil receiver (documenting current behavior)
+	assert.Panics(t, func() {
+		logger.Debug("test message")
+	})
+
+	assert.Panics(t, func() {
+		logger.Info("test message")
+	})
+
+	assert.Panics(t, func() {
+		logger.Warn("test message")
+	})
+
+	assert.Panics(t, func() {
+		logger.Error("test message")
+	})
+}
+
+func TestLogger_WithNilSlogLogger(t *testing.T) {
+	logger := &Logger{Logger: nil}
+
+	// Test that methods panic with nil slog.Logger (documenting current behavior)
+	assert.Panics(t, func() {
+		logger.Debug("test message")
+	})
+
+	assert.Panics(t, func() {
+		logger.Info("test message")
+	})
+
+	assert.Panics(t, func() {
+		logger.Warn("test message")
+	})
+
+	assert.Panics(t, func() {
+		logger.Error("test message")
+	})
+}
+
+func TestLogger_EmptyMessages(t *testing.T) {
+	var buf bytes.Buffer
+	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})
+	slogLogger := slog.New(handler)
+
+	logger := &Logger{Logger: slogLogger}
+
+	// Test with empty message
+	assert.NotPanics(t, func() {
+		logger.Debug("")
+	})
+
+	assert.NotPanics(t, func() {
+		logger.Info("")
+	})
+
+	assert.NotPanics(t, func() {
+		logger.Warn("")
+	})
+
+	assert.NotPanics(t, func() {
+		logger.Error("")
+	})
+
+	// Test with nil arguments (should not panic)
+	assert.NotPanics(t, func() {
+		logger.Debug("test", nil, "value")
+	})
+}
+
+func TestLogger_InvalidLogLevel(t *testing.T) {
+	// Test with invalid log level - should not panic but use default
+	logger := NewLogger("invalid_level")
+	assert.NotNil(t, logger)
+}
+
+func TestLogger_ConfigWithEmptyLogLevel(t *testing.T) {
+	config := &entities.Config{
+		LogLevel: "",
+	}
+
+	logger := NewLoggerFromConfig(config)
+	// Should not panic and should return a logger (likely with default level)
+	assert.NotNil(t, logger)
+}
+
+func TestLogger_ConfigWithInvalidLogLevel(t *testing.T) {
+	config := &entities.Config{
+		LogLevel: "invalid_level",
+	}
+
+	logger := NewLoggerFromConfig(config)
+	// Should not panic and should return a logger (likely with default level)
+	assert.NotNil(t, logger)
+}
