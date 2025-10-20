@@ -11,8 +11,8 @@ import (
 	"qwen-go-proxy/internal/domain/entities"
 	"qwen-go-proxy/internal/mocks"
 
-	"go.uber.org/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 )
 
 func TestOAuthGatewayImpl_GenerateCodeVerifier(t *testing.T) {

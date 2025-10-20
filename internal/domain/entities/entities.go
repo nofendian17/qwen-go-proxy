@@ -585,13 +585,12 @@ type CircuitBreaker struct {
 
 // StreamingConfig holds configuration for the streaming handler
 type StreamingConfig struct {
-	MaxErrors           int
-	BufferSize          int
-	TimeoutSeconds      int
-	WindowSize          int
-	SimilarityThreshold float64
-	TimeWindow          time.Duration
-	MinConfidence       float64
+	MaxErrors      int
+	BufferSize     int
+	TimeoutSeconds int
+	WindowSize     int
+	TimeWindow     time.Duration
+	MinConfidence  float64
 }
 
 // StutteringDetector provides advanced stuttering detection

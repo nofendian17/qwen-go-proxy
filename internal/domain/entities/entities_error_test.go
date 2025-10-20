@@ -256,14 +256,14 @@ func TestCredentials_Sanitize_NilReceiver(t *testing.T) {
 
 func TestCredentials_IsExpired_EdgeCases(t *testing.T) {
 	tests := []struct {
-		name     string
+		name        string
 		credentials *Credentials
-		expected bool
+		expected    bool
 	}{
 		{
-			name:     "nil credentials",
+			name:        "nil credentials",
 			credentials: nil,
-			expected: true,
+			expected:    true,
 		},
 		{
 			name: "zero expiry date",
@@ -313,7 +313,7 @@ func TestConfig_Validate_MissingRequiredFields(t *testing.T) {
 			config: &Config{
 				QWENOAuthClientID:      "test-client",
 				QWENOAuthDeviceAuthURL: "test-url",
-				APIBaseURL:            "test-api",
+				APIBaseURL:             "test-api",
 			},
 			expect: "qwen_oauth_base_url is required",
 		},
@@ -322,7 +322,7 @@ func TestConfig_Validate_MissingRequiredFields(t *testing.T) {
 			config: &Config{
 				QWENOAuthBaseURL:       "test-base",
 				QWENOAuthDeviceAuthURL: "test-url",
-				APIBaseURL:            "test-api",
+				APIBaseURL:             "test-api",
 			},
 			expect: "qwen_oauth_client_id is required",
 		},
@@ -331,7 +331,7 @@ func TestConfig_Validate_MissingRequiredFields(t *testing.T) {
 			config: &Config{
 				QWENOAuthBaseURL:  "test-base",
 				QWENOAuthClientID: "test-client",
-				APIBaseURL:       "test-api",
+				APIBaseURL:        "test-api",
 			},
 			expect: "qwen_oauth_device_auth_url is required",
 		},
@@ -367,19 +367,19 @@ func TestConfig_Validate_InvalidValues(t *testing.T) {
 				QWENOAuthBaseURL:       "test-base",
 				QWENOAuthClientID:      "test-client",
 				QWENOAuthDeviceAuthURL: "test-url",
-				APIBaseURL:            "test-api",
-				LogLevel:              "invalid",
+				APIBaseURL:             "test-api",
+				LogLevel:               "invalid",
 			},
 			expect: "invalid log_level",
 		},
 		{
 			name: "negative rate limit rps",
 			config: &Config{
-				QWENOAuthBaseURL:       "test-base",
-				QWENOAuthClientID:      "test-client",
-				QWENOAuthDeviceAuthURL: "test-url",
-				APIBaseURL:            "test-api",
-				LogLevel:              "info",
+				QWENOAuthBaseURL:           "test-base",
+				QWENOAuthClientID:          "test-client",
+				QWENOAuthDeviceAuthURL:     "test-url",
+				APIBaseURL:                 "test-api",
+				LogLevel:                   "info",
 				RateLimitRequestsPerSecond: -1,
 			},
 			expect: "rate_limit_rps must be positive",
@@ -387,11 +387,11 @@ func TestConfig_Validate_InvalidValues(t *testing.T) {
 		{
 			name: "zero rate limit rps",
 			config: &Config{
-				QWENOAuthBaseURL:       "test-base",
-				QWENOAuthClientID:      "test-client",
-				QWENOAuthDeviceAuthURL: "test-url",
-				APIBaseURL:            "test-api",
-				LogLevel:              "info",
+				QWENOAuthBaseURL:           "test-base",
+				QWENOAuthClientID:          "test-client",
+				QWENOAuthDeviceAuthURL:     "test-url",
+				APIBaseURL:                 "test-api",
+				LogLevel:                   "info",
 				RateLimitRequestsPerSecond: 0,
 			},
 			expect: "rate_limit_rps must be positive",
@@ -402,10 +402,10 @@ func TestConfig_Validate_InvalidValues(t *testing.T) {
 				QWENOAuthBaseURL:           "test-base",
 				QWENOAuthClientID:          "test-client",
 				QWENOAuthDeviceAuthURL:     "test-url",
-				APIBaseURL:                "test-api",
-				LogLevel:                  "info",
+				APIBaseURL:                 "test-api",
+				LogLevel:                   "info",
 				RateLimitRequestsPerSecond: 10,
-				RateLimitBurst:            -1,
+				RateLimitBurst:             -1,
 			},
 			expect: "rate_limit_burst must be positive",
 		},
@@ -663,7 +663,7 @@ func TestAppError_Unwrap_NilReceiver(t *testing.T) {
 
 func TestErrorConstructors_WithEmptyParameters(t *testing.T) {
 	tests := []struct {
-		name     string
+		name        string
 		constructor func() *AppError
 	}{
 		{

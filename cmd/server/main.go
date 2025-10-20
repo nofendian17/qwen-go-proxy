@@ -10,7 +10,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"qwen-go-proxy/internal/domain/entities"
 	"qwen-go-proxy/internal/infrastructure/config"
 	"qwen-go-proxy/internal/infrastructure/logging"
 	"qwen-go-proxy/internal/infrastructure/middleware"
@@ -48,20 +47,9 @@ func main() {
 	// Initialize repositories
 	credentialRepo := auth.NewFileCredentialRepository(cfg.QWENDir)
 
-	// Create streaming configuration
-	streamingConfig := &entities.StreamingConfig{
-		MaxErrors:           cfg.StreamingMaxErrors,
-		BufferSize:          cfg.StreamingBufferSize,
-		TimeoutSeconds:      cfg.StreamingTimeoutSeconds,
-		WindowSize:          cfg.StreamingWindowSize,
-		SimilarityThreshold: cfg.StreamingSimilarityThreshold,
-		TimeWindow:          cfg.StreamingTimeWindow,
-		MinConfidence:       cfg.StreamingMinConfidence,
-	}
-
 	// Initialize use cases
 	authUseCase := auth.NewAuthUseCase(cfg, oauthGateway, credentialRepo, logger)
-	streamingUseCase := streaming.NewStreamingUseCase(streamingConfig, logger)
+	streamingUseCase := streaming.NewStreamingUseCase(logger)
 	proxyUseCase := proxy.NewProxyUseCase(authUseCase, qwenGateway, streamingUseCase, logger)
 
 	// Initialize controllers

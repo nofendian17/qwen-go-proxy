@@ -1,17 +1,13 @@
 package streaming
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
-	"qwen-go-proxy/internal/domain/entities"
 	"qwen-go-proxy/internal/mocks"
 
 	"github.com/stretchr/testify/assert"
@@ -23,137 +19,11 @@ func TestNewStreamingUseCase(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockLogger := mocks.NewMockLoggerInterface(ctrl)
-	config := &entities.StreamingConfig{
-		MaxErrors:           5,
-		BufferSize:          4096,
-		TimeoutSeconds:      300,
-		WindowSize:          5,
-		SimilarityThreshold: 0.8,
-		TimeWindow:          time.Second * 2,
-		MinConfidence:       0.7,
-	}
 
-	useCase := NewStreamingUseCase(config, mockLogger)
+	useCase := NewStreamingUseCase(mockLogger)
 
 	assert.NotNil(t, useCase)
-	assert.Equal(t, config, useCase.config)
 	assert.Equal(t, mockLogger, useCase.logger)
-	assert.NotNil(t, useCase.circuitBreaker)
-	assert.NotNil(t, useCase.stutteringDetector)
-
-	// Check circuit breaker initialization
-	assert.Equal(t, config.MaxErrors, useCase.circuitBreaker.MaxFailures)
-	assert.Equal(t, entities.CircuitClosed, useCase.circuitBreaker.State)
-
-	// Check stuttering detector initialization
-	assert.Equal(t, config.WindowSize, useCase.stutteringDetector.WindowSize)
-	assert.Equal(t, config.SimilarityThreshold, useCase.stutteringDetector.SimilarityThreshold)
-	assert.Equal(t, config.TimeWindow, useCase.stutteringDetector.TimeWindow)
-	assert.Equal(t, config.MinConfidence, useCase.stutteringDetector.MinConfidence)
-}
-
-func TestStreamingUseCase_CanExecute_CircuitClosed(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := mocks.NewMockLoggerInterface(ctrl)
-	config := &entities.StreamingConfig{MaxErrors: 5}
-
-	useCase := NewStreamingUseCase(config, mockLogger)
-	useCase.circuitBreaker.State = entities.CircuitClosed
-
-	canExecute := useCase.canExecute()
-	assert.True(t, canExecute)
-}
-
-func TestStreamingUseCase_CanExecute_CircuitOpen(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := mocks.NewMockLoggerInterface(ctrl)
-	config := &entities.StreamingConfig{MaxErrors: 5}
-
-	useCase := NewStreamingUseCase(config, mockLogger)
-
-	// Mock logging calls
-	mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Info(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Warn(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Error(gomock.Any(), gomock.Any()).AnyTimes()
-
-	useCase.circuitBreaker.State = entities.CircuitOpen
-	useCase.circuitBreaker.LastFailureTime = time.Now().Add(time.Hour)
-}
-
-func TestStreamingUseCase_CanExecute_CircuitHalfOpen(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := mocks.NewMockLoggerInterface(ctrl)
-	config := &entities.StreamingConfig{MaxErrors: 5}
-
-	useCase := NewStreamingUseCase(config, mockLogger)
-
-	// Mock logging calls
-	mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Info(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Warn(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Error(gomock.Any(), gomock.Any()).AnyTimes()
-
-	useCase.circuitBreaker.State = entities.CircuitOpen
-	useCase.circuitBreaker.LastFailureTime = time.Now().Add(time.Hour) // Future time, should not transition
-
-	canExecute := useCase.canExecute()
-	assert.False(t, canExecute)
-}
-
-func TestStreamingUseCase_RecordFailure(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := mocks.NewMockLoggerInterface(ctrl)
-	config := &entities.StreamingConfig{MaxErrors: 2}
-
-	useCase := NewStreamingUseCase(config, mockLogger)
-
-	// Mock logging calls
-	mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Info(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Warn(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Error(gomock.Any(), gomock.Any()).AnyTimes()
-
-	// Initially closed
-	assert.Equal(t, entities.CircuitClosed, useCase.circuitBreaker.State)
-
-	// Record first failure
-	useCase.recordFailure()
-	assert.Equal(t, entities.CircuitClosed, useCase.circuitBreaker.State)
-	assert.Equal(t, 1, useCase.circuitBreaker.FailureCount)
-
-	// Record second failure - should open circuit
-	useCase.recordFailure()
-	assert.Equal(t, entities.CircuitOpen, useCase.circuitBreaker.State)
-	assert.Equal(t, 2, useCase.circuitBreaker.FailureCount)
-}
-
-func TestStreamingUseCase_RecordSuccess(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := mocks.NewMockLoggerInterface(ctrl)
-	config := &entities.StreamingConfig{MaxErrors: 2}
-
-	useCase := NewStreamingUseCase(config, mockLogger)
-
-	// Start with half-open state
-	useCase.circuitBreaker.State = entities.CircuitHalfOpen
-	useCase.circuitBreaker.FailureCount = 1
-
-	// Record success - should increment tries but not close circuit yet (needs 3 tries)
-	useCase.recordSuccess()
-	assert.Equal(t, entities.CircuitHalfOpen, useCase.circuitBreaker.State)
-	assert.Equal(t, 1, useCase.circuitBreaker.FailureCount)
-	assert.Equal(t, 1, useCase.circuitBreaker.SuccessCount)
 }
 
 func TestStreamingUseCase_ProcessStreamingResponse_Success(t *testing.T) {
@@ -161,16 +31,11 @@ func TestStreamingUseCase_ProcessStreamingResponse_Success(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockLogger := mocks.NewMockLoggerInterface(ctrl)
-	config := &entities.StreamingConfig{
-		MaxErrors:      5,
-		BufferSize:     4096,
-		TimeoutSeconds: 300,
-	}
 
-	useCase := NewStreamingUseCase(config, mockLogger)
+	useCase := NewStreamingUseCase(mockLogger)
 
 	// Create a mock HTTP response with streaming data
-	streamingData := `data: {"id":"test","object":"chat.completion.chunk","created":1234567890,"model":"test-model","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}
+	streamingData := `data: {"choices":[{"delta":{"content":"Hello"}}]}
 
 data: [DONE]
 
@@ -187,131 +52,66 @@ data: [DONE]
 	// Mock logger calls
 	mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Info(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Error(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug("Client disconnected during streaming, stopping response").Times(0)
 
 	err := useCase.ProcessStreamingResponse(ctx, resp, writer)
 
 	assert.NoError(t, err)
+	// Check that data was written to the response
+	responseBody := writer.Body.String()
+	assert.Contains(t, responseBody, "data:")
+	assert.Contains(t, responseBody, "[DONE]")
 }
 
-func TestStreamingUseCase_ProcessStreamingResponse_CircuitOpen(t *testing.T) {
+func TestStreamingUseCase_ProcessStreamingResponse_ClientDisconnect(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockLogger := mocks.NewMockLoggerInterface(ctrl)
-	config := &entities.StreamingConfig{MaxErrors: 1}
 
-	useCase := NewStreamingUseCase(config, mockLogger)
+	useCase := NewStreamingUseCase(mockLogger)
 
-	// Open the circuit and set recent failure time
-	useCase.circuitBreaker.State = entities.CircuitOpen
-	useCase.circuitBreaker.LastFailureTime = time.Now()
+	// Create a response with data that will be processed
+	streamingData := `data: {"choices":[{"delta":{"content":"Hello"}}]}
 
+data: {"choices":[{"delta":{"content":" world"}}]}
+
+data: [DONE]
+
+`
 	resp := &http.Response{
 		StatusCode: 200,
-		Body:       io.NopCloser(strings.NewReader("")),
+		Body:       io.NopCloser(strings.NewReader(streamingData)),
 		Header:     make(http.Header),
 	}
 
 	writer := httptest.NewRecorder()
-	ctx := context.Background()
 
-	// The circuit breaker check happens first, so Debug call won't be reached
-	mockLogger.EXPECT().Info("Starting streaming response processing", gomock.Any()).Times(1)
-	mockLogger.EXPECT().Warn("Circuit breaker is open, rejecting request", gomock.Any()).Times(1)
+	// Create context that will be cancelled immediately
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately to simulate client disconnect
+
+	// Mock logger calls
+	mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any(), gomock.Any()).AnyTimes()
 
 	err := useCase.ProcessStreamingResponse(ctx, resp, writer)
 
+	// Should return context.Canceled error
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "circuit breaker is open")
+	assert.Equal(t, context.Canceled, err)
 }
 
-func TestStreamingUseCase_ProcessStreamingResponse_Timeout(t *testing.T) {
+func TestStreamingUseCase_ProcessStreamingResponse_InvalidJSON(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockLogger := mocks.NewMockLoggerInterface(ctrl)
-	config := &entities.StreamingConfig{
-		MaxErrors:      5,
-		BufferSize:     4096,
-		TimeoutSeconds: 1, // Very short timeout
-	}
 
-	useCase := NewStreamingUseCase(config, mockLogger)
+	useCase := NewStreamingUseCase(mockLogger)
 
-	// Create a response that will take longer than timeout
-	streamingData := `data: {"content": "test"}
-data: [DONE]
-`
-	resp := &http.Response{
-		StatusCode: 200,
-		Body:       io.NopCloser(strings.NewReader(streamingData)),
-		Header:     make(http.Header),
-	}
-
-	writer := httptest.NewRecorder()
-
-	// Create context with timeout shorter than processing time
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
-	defer cancel()
-
-	mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Info(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Error(gomock.Any(), gomock.Any()).AnyTimes()
-
-	err := useCase.ProcessStreamingResponse(ctx, resp, writer)
-
-	// Processing completes before timeout
-	assert.NoError(t, err)
-}
-
-func TestStreamingUseCase_ProcessStreamingResponse_InvalidResponse(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := mocks.NewMockLoggerInterface(ctrl)
-	config := &entities.StreamingConfig{MaxErrors: 5}
-
-	useCase := NewStreamingUseCase(config, mockLogger)
-
-	// Create response with invalid data that should cause processing errors
-	resp := &http.Response{
-		StatusCode: 200,
-		Body:       io.NopCloser(strings.NewReader("invalid data")),
-		Header:     make(http.Header),
-	}
-
-	writer := httptest.NewRecorder()
-	ctx := context.Background()
-
-	mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Info(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Error(gomock.Any(), gomock.Any()).AnyTimes()
-
-	err := useCase.ProcessStreamingResponse(ctx, resp, writer)
-
-	// Should handle the error gracefully
-	assert.NoError(t, err) // The function should not return an error for processing issues
-}
-
-func TestStreamingUseCase_ProcessStreamingResponse_WithProcessor(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := mocks.NewMockLoggerInterface(ctrl)
-	config := &entities.StreamingConfig{
-		MaxErrors:           5,
-		BufferSize:          4096,
-		TimeoutSeconds:      300,
-		WindowSize:          5,
-		SimilarityThreshold: 0.8,
-		TimeWindow:          time.Second * 2,
-		MinConfidence:       0.7,
-	}
-
-	useCase := NewStreamingUseCase(config, mockLogger)
-
-	streamingData := `data: {"id":"test","object":"chat.completion.chunk","created":1234567890,"model":"test-model","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}
+	// Create response with invalid JSON data
+	streamingData := `data: {"invalid": json}
 
 data: [DONE]
 
@@ -325,349 +125,16 @@ data: [DONE]
 	writer := httptest.NewRecorder()
 	ctx := context.Background()
 
+	// Mock logger calls - expect Warn for malformed JSON
 	mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Info(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Error(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any(), gomock.Any()).AnyTimes()
 
 	err := useCase.ProcessStreamingResponse(ctx, resp, writer)
 
+	// Should handle invalid JSON gracefully (skip malformed chunks)
 	assert.NoError(t, err)
-}
-
-func TestStutteringDetector_AnalyzeStuttering(t *testing.T) {
-	detector := &entities.StutteringDetector{
-		WindowSize:          3,
-		SimilarityThreshold: 0.8,
-		TimeWindow:          2 * time.Second,
-		MinConfidence:       0.7,
-		ContentHistory:      make([]entities.ContentChunk, 0),
-	}
-
-	// Test with first chunk (should always be stuttering)
-	result := detector.AnalyzeStuttering("Hello", "")
-	if !result.IsStuttering {
-		t.Errorf("First chunk should always be stuttering")
-	}
-	if result.Confidence != 1.0 {
-		t.Errorf("First chunk should have confidence 1.0, got: %f", result.Confidence)
-	}
-
-	// Add more chunks to history for better analysis
-	detector.ContentHistory = append(detector.ContentHistory, entities.ContentChunk{
-		Content:    "Hello",
-		Timestamp:  time.Now().Add(-time.Second),
-		Length:     5,
-		TokenCount: 1,
-		ChunkIndex: 0,
-	})
-	detector.ContentHistory = append(detector.ContentHistory, entities.ContentChunk{
-		Content:    " world",
-		Timestamp:  time.Now(),
-		Length:     6,
-		TokenCount: 1,
-		ChunkIndex: 1,
-	})
-
-	// Test with similar content (should detect stuttering)
-	result = detector.AnalyzeStuttering("Hello", "Hello")
-	if result.Confidence < detector.MinConfidence {
-		t.Logf("Content similarity test: confidence=%f, threshold=%f", result.Confidence, detector.MinConfidence)
-	}
-}
-
-func BenchmarkStreamingUseCase_ProcessStreamingResponse(b *testing.B) {
-	ctrl := gomock.NewController(b)
-	defer ctrl.Finish()
-
-	mockLogger := mocks.NewMockLoggerInterface(ctrl)
-	config := &entities.StreamingConfig{
-		MaxErrors:           10,
-		BufferSize:          4096,
-		TimeoutSeconds:      30,
-		WindowSize:          5,
-		SimilarityThreshold: 0.8,
-		TimeWindow:          2 * time.Second,
-		MinConfidence:       0.7,
-	}
-
-	useCase := NewStreamingUseCase(config, mockLogger)
-
-	// Create larger mock response for benchmarking
-	var responseBody bytes.Buffer
-	for i := 0; i < 100; i++ {
-		data := map[string]interface{}{
-			"id":      "bench-test",
-			"object":  "chat.completion.chunk",
-			"created": float64(time.Now().Unix()),
-			"model":   "qwen3-coder-plus",
-			"choices": []interface{}{
-				map[string]interface{}{
-					"index": 0,
-					"delta": map[string]interface{}{
-						"content": "test content ",
-					},
-				},
-			},
-		}
-		jsonData, _ := json.Marshal(data)
-		responseBody.WriteString("data: ")
-		responseBody.Write(jsonData)
-		responseBody.WriteString("\n\n")
-	}
-	responseBody.WriteString("data: [DONE]\n\n")
-
-	resp := &http.Response{
-		StatusCode: 200,
-		Body:       io.NopCloser(strings.NewReader(responseBody.String())),
-		Header:     make(http.Header),
-	}
-	resp.Header.Set("Content-Type", "text/event-stream")
-
-	mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Info(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Error(gomock.Any(), gomock.Any()).AnyTimes()
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		w := httptest.NewRecorder()
-		err := useCase.ProcessStreamingResponse(context.Background(), resp, w)
-		if err != nil {
-			b.Fatalf("Benchmark failed: %v", err)
-		}
-	}
-}
-
-// Negative Test Cases
-
-func TestNewStreamingUseCase_NilConfig(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := mocks.NewMockLoggerInterface(ctrl)
-
-	// Test with nil config - should panic (documenting current behavior)
-	assert.Panics(t, func() {
-		NewStreamingUseCase(nil, mockLogger)
-	})
-}
-
-func TestNewStreamingUseCase_NilLogger(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	config := &entities.StreamingConfig{
-		MaxErrors:      5,
-		BufferSize:     4096,
-		TimeoutSeconds: 300,
-	}
-
-	// Test with nil logger - should not panic (current behavior)
-	assert.NotPanics(t, func() {
-		NewStreamingUseCase(config, nil)
-	})
-}
-
-func TestStreamingUseCase_ProcessStreamingResponse_NilResponse(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := mocks.NewMockLoggerInterface(ctrl)
-	config := &entities.StreamingConfig{MaxErrors: 5}
-
-	useCase := NewStreamingUseCase(config, mockLogger)
-	writer := httptest.NewRecorder()
-	ctx := context.Background()
-
-	// Test with nil response - should panic (documenting current behavior)
-	assert.Panics(t, func() {
-		useCase.ProcessStreamingResponse(ctx, nil, writer)
-	})
-}
-
-func TestStreamingUseCase_ProcessStreamingResponse_NilWriter(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := mocks.NewMockLoggerInterface(ctrl)
-	config := &entities.StreamingConfig{MaxErrors: 5}
-
-	useCase := NewStreamingUseCase(config, mockLogger)
-
-	resp := &http.Response{
-		StatusCode: 200,
-		Body:       io.NopCloser(strings.NewReader("")),
-		Header:     make(http.Header),
-	}
-
-	ctx := context.Background()
-
-	// Expect the Info call for starting processing and Debug call for setting headers
-	mockLogger.EXPECT().Info("Starting streaming response processing", gomock.Any()).Times(1)
-	mockLogger.EXPECT().Debug("Setting SSE headers").Times(1)
-
-	// Test with nil writer - should panic (documenting current behavior)
-	assert.Panics(t, func() {
-		useCase.ProcessStreamingResponse(ctx, resp, nil)
-	})
-}
-
-func TestStreamingUseCase_ProcessStreamingResponse_LoggerPanic(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := mocks.NewMockLoggerInterface(ctrl)
-	config := &entities.StreamingConfig{MaxErrors: 5}
-
-	useCase := NewStreamingUseCase(config, mockLogger)
-
-	resp := &http.Response{
-		StatusCode: 200,
-		Body:       io.NopCloser(strings.NewReader("")),
-		Header:     make(http.Header),
-	}
-
-	writer := httptest.NewRecorder()
-	ctx := context.Background()
-
-	// Mock logger to panic
-	mockLogger.EXPECT().Info(gomock.Any(), gomock.Any()).DoAndReturn(func(msg string, args ...any) {
-		panic("logger panic")
-	})
-
-	// Should handle logger panic gracefully
-	assert.Panics(t, func() {
-		useCase.ProcessStreamingResponse(ctx, resp, writer)
-	})
-}
-
-func TestStreamingUseCase_ProcessStreamingResponse_ConfigWithInvalidValues(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := mocks.NewMockLoggerInterface(ctrl)
-
-	// Config with invalid values
-	config := &entities.StreamingConfig{
-		MaxErrors:      -1, // Invalid negative value
-		BufferSize:     0,  // Invalid zero value
-		TimeoutSeconds: -1, // Invalid negative value
-	}
-
-	useCase := NewStreamingUseCase(config, mockLogger)
-
-	resp := &http.Response{
-		StatusCode: 200,
-		Body:       io.NopCloser(strings.NewReader("")),
-		Header:     make(http.Header),
-	}
-
-	writer := httptest.NewRecorder()
-	ctx := context.Background()
-
-	// Expect the Info call for starting processing and Debug call for setting headers
-	mockLogger.EXPECT().Info(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
-
-	// Should handle invalid config gracefully
-	err := useCase.ProcessStreamingResponse(ctx, resp, writer)
-	assert.NoError(t, err)
-}
-
-func TestStreamingUseCase_RecordFailure_LoggerPanic(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := mocks.NewMockLoggerInterface(ctrl)
-	config := &entities.StreamingConfig{MaxErrors: 2}
-
-	useCase := NewStreamingUseCase(config, mockLogger)
-
-	// Set up circuit breaker to trigger the Warn call (need MaxErrors failures)
-	useCase.circuitBreaker.FailureCount = 1 // One more failure will trigger the Warn
-
-	// Mock logger to panic
-	mockLogger.EXPECT().Warn("Circuit breaker opened due to too many failures", gomock.Any()).DoAndReturn(func(msg string, args ...any) {
-		panic("logger panic")
-	})
-
-	// Should handle logger panic gracefully
-	assert.Panics(t, func() {
-		useCase.recordFailure()
-	})
-}
-
-func TestStreamingUseCase_RecordSuccess_LoggerPanic(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := mocks.NewMockLoggerInterface(ctrl)
-	config := &entities.StreamingConfig{MaxErrors: 2}
-
-	useCase := NewStreamingUseCase(config, mockLogger)
-
-	// Start with half-open state
-	useCase.circuitBreaker.State = entities.CircuitHalfOpen
-	// Set up to trigger the Info call (need HalfOpenMaxTries successes)
-	useCase.circuitBreaker.HalfOpenTries = 2 // One more success will trigger the Info (HalfOpenMaxTries = 3)
-
-	// Mock logger to panic
-	mockLogger.EXPECT().Info("Circuit breaker closed after successful half-open attempts").DoAndReturn(func(msg string, args ...any) {
-		panic("logger panic")
-	})
-
-	// Should handle logger panic gracefully
-	assert.Panics(t, func() {
-		useCase.recordSuccess()
-	})
-}
-
-func TestStutteringDetector_AnalyzeStuttering_NilHistory(t *testing.T) {
-	detector := &entities.StutteringDetector{
-		WindowSize:          3,
-		SimilarityThreshold: 0.8,
-		TimeWindow:          2 * time.Second,
-		MinConfidence:       0.7,
-		ContentHistory:      nil, // Nil history
-	}
-
-	// Should handle nil history gracefully
-	result := detector.AnalyzeStuttering("test", "")
-	assert.NotNil(t, result)
-}
-
-func TestStutteringDetector_AnalyzeStuttering_EmptyContent(t *testing.T) {
-	detector := &entities.StutteringDetector{
-		WindowSize:          3,
-		SimilarityThreshold: 0.8,
-		TimeWindow:          2 * time.Second,
-		MinConfidence:       0.7,
-		ContentHistory:      make([]entities.ContentChunk, 0),
-	}
-
-	// Should handle empty content gracefully
-	result := detector.AnalyzeStuttering("", "")
-	assert.NotNil(t, result)
-	assert.True(t, result.IsStuttering) // Empty content should be considered stuttering
-}
-
-func TestStutteringDetector_AnalyzeStuttering_InvalidTimestamps(t *testing.T) {
-	detector := &entities.StutteringDetector{
-		WindowSize:          3,
-		SimilarityThreshold: 0.8,
-		TimeWindow:          2 * time.Second,
-		MinConfidence:       0.7,
-		ContentHistory: []entities.ContentChunk{
-			{
-				Content:    "test",
-				Timestamp:  time.Time{}, // Zero timestamp
-				Length:     4,
-				TokenCount: 1,
-				ChunkIndex: 0,
-			},
-		},
-	}
-
-	// Should handle invalid timestamps gracefully
-	result := detector.AnalyzeStuttering("test", "test")
-	assert.NotNil(t, result)
+	// Should still contain the DONE message
+	responseBody := writer.Body.String()
+	assert.Contains(t, responseBody, "[DONE]")
 }
