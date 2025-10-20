@@ -630,7 +630,7 @@ func TestAppError_WithRequestID_NilReceiver(t *testing.T) {
 	// WithRequestID doesn't handle nil receivers gracefully and will panic
 	// This test documents the current behavior
 	assert.Panics(t, func() {
-		err.WithRequestID("test-id")
+		_ = err.WithRequestID("test-id")
 	})
 }
 
@@ -639,7 +639,7 @@ func TestAppError_WithContext_NilReceiver(t *testing.T) {
 	// WithContext doesn't handle nil receivers gracefully and will panic
 	// This test documents the current behavior
 	assert.Panics(t, func() {
-		err.WithContext("key", "value")
+		_ = err.WithContext("key", "value")
 	})
 }
 
@@ -648,7 +648,7 @@ func TestAppError_Error_NilReceiver(t *testing.T) {
 	// Error method doesn't handle nil receivers gracefully and will panic
 	// This test documents the current behavior
 	assert.Panics(t, func() {
-		err.Error()
+		_ = err.Error()
 	})
 }
 
@@ -657,7 +657,7 @@ func TestAppError_Unwrap_NilReceiver(t *testing.T) {
 	// Unwrap method doesn't handle nil receivers gracefully and will panic
 	// This test documents the current behavior
 	assert.Panics(t, func() {
-		err.Unwrap()
+		_ = err.Unwrap()
 	})
 }
 

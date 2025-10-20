@@ -150,13 +150,6 @@ All configuration is done via environment variables:
 | `QWEN_OAUTH_SCOPE`               | `openid profile email model.completion`          | Qwen OAuth scope                                        |
 | `QWEN_OAUTH_DEVICE_AUTH_URL`     | `https://chat.qwen.ai/api/v1/oauth2/device/code` | Device authorization URL                                |
 | `API_BASE_URL`                   | `https://portal.qwen.ai/v1`                      | Base URL for Qwen API                                   |
-| `STREAMING_MAX_ERRORS`           | `10`                                             | Maximum streaming errors before failure                 |
-| `STREAMING_BUFFER_SIZE`          | `4096`                                           | Streaming buffer size in bytes                          |
-| `STREAMING_TIMEOUT_SECONDS`      | `900`                                            | Streaming timeout in seconds                            |
-| `STREAMING_WINDOW_SIZE`          | `5`                                              | Streaming analysis window size                          |
-| `STREAMING_SIMILARITY_THRESHOLD` | `0.8`                                            | Streaming similarity threshold for stuttering detection |
-| `STREAMING_TIME_WINDOW`          | `2s`                                             | Streaming time window for analysis                      |
-| `STREAMING_MIN_CONFIDENCE`       | `0.7`                                            | Minimum confidence for streaming decisions              |
 
 **Note**: `TRUSTED_PROXIES` supports comma-separated values with automatic whitespace trimming (e.g.,
 `"127.0.0.1, 192.168.1.1, 10.0.0.1"`).

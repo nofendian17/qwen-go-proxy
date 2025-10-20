@@ -83,15 +83,6 @@ type Config struct {
 	RateLimitRequestsPerSecond int `json:"rate_limit_rps" env:"RATE_LIMIT_RPS" env-default:"10"`
 	RateLimitBurst             int `json:"rate_limit_burst" env:"RATE_LIMIT_BURST" env-default:"20"`
 
-	// Streaming configuration
-	StreamingMaxErrors           int           `json:"streaming_max_errors" env:"STREAMING_MAX_ERRORS" env-default:"10"`
-	StreamingBufferSize          int           `json:"streaming_buffer_size" env:"STREAMING_BUFFER_SIZE" env-default:"4096"`
-	StreamingTimeoutSeconds      int           `json:"streaming_timeout_seconds" env:"STREAMING_TIMEOUT_SECONDS" env-default:"900"`
-	StreamingWindowSize          int           `json:"streaming_window_size" env:"STREAMING_WINDOW_SIZE" env-default:"5"`
-	StreamingSimilarityThreshold float64       `json:"streaming_similarity_threshold" env:"STREAMING_SIMILARITY_THRESHOLD" env-default:"0.8"`
-	StreamingTimeWindow          time.Duration `json:"streaming_time_window" env:"STREAMING_TIME_WINDOW" env-default:"2s"`
-	StreamingMinConfidence       float64       `json:"streaming_min_confidence" env:"STREAMING_MIN_CONFIDENCE" env-default:"0.7"`
-
 	// API configuration
 	APIBaseURL string `json:"api_base_url" env:"API_BASE_URL" env-required:"true"`
 
