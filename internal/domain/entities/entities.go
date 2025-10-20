@@ -560,13 +560,14 @@ type ParsedChunk struct {
 
 // StreamState holds the current state of stream processing
 type StreamState struct {
-	Current        StreamingState
-	IsStuttering   bool
-	Buffer         string
-	ChunkCount     int
-	ErrorCount     int
-	LastValidChunk time.Time
-	StartTime      time.Time
+	Current          StreamingState
+	IsStuttering     bool
+	Buffer           string
+	ChunkCount       int
+	ErrorCount       int
+	LastValidChunk   time.Time
+	StartTime        time.Time
+	LastChunkContent string // Track last chunk content for duplicate detection
 }
 
 // CircuitBreaker implements the circuit breaker pattern for upstream resilience
@@ -671,21 +672,24 @@ func (sd *StutteringDetector) AnalyzeStuttering(current, previous string) Stutte
 		}
 	}
 
-	// Multi-factor analysis
+	// Enhanced stuttering detection with more sensitive analysis
 	prefixMatch := sd.analyzePrefixMatch(current, previous)
+	exactMatch := sd.analyzeExactMatch(current, previous)
 	lengthProgression := sd.analyzeLengthProgression()
 	timingPattern := sd.analyzeTimingPattern()
 	contentSimilarity := sd.analyzeContentSimilarity(current, previous)
+	repetitionPattern := sd.analyzeRepetitionPattern()
 
-	// Weighted confidence scoring
-	confidence := (prefixMatch*0.3 + lengthProgression*0.3 + timingPattern*0.2 + contentSimilarity*0.2)
+	// Very aggressive confidence scoring for repetitive content
+	confidence := (exactMatch*0.5 + prefixMatch*0.2 + repetitionPattern*0.3 + lengthProgression*0.1 + timingPattern*0.05 + contentSimilarity*0.05)
 
-	isStuttering := confidence >= sd.MinConfidence
+	// Much lower threshold to catch even subtle stuttering
+	isStuttering := confidence >= (sd.MinConfidence * 0.6)
 
 	result := StutteringResult{
 		IsStuttering: isStuttering,
 		Confidence:   confidence,
-		Reason:       sd.buildReasonString(prefixMatch, lengthProgression, timingPattern, contentSimilarity),
+		Reason:       sd.buildReasonString(prefixMatch, lengthProgression, timingPattern, contentSimilarity, exactMatch, repetitionPattern),
 		ShouldBuffer: isStuttering,
 		ShouldFlush:  !isStuttering && len(sd.ContentHistory) > 1,
 	}
@@ -714,6 +718,57 @@ func (sd *StutteringDetector) analyzePrefixMatch(current, previous string) float
 	}
 
 	return 0.0
+}
+
+// analyzeExactMatch checks if current content is exactly the same as previous content
+func (sd *StutteringDetector) analyzeExactMatch(current, previous string) float64 {
+	if previous == "" || current == "" {
+		return 0.0
+	}
+
+	if current == previous {
+		return 1.0
+	}
+
+	return 0.0
+}
+
+// analyzeRepetitionPattern detects repetitive patterns in recent chunks
+func (sd *StutteringDetector) analyzeRepetitionPattern() float64 {
+	if len(sd.ContentHistory) < 2 {
+		return 0.0
+	}
+
+	// Check last few chunks for repetition
+	recent := sd.ContentHistory[max(0, len(sd.ContentHistory)-5):]
+	if len(recent) < 2 {
+		return 0.0
+	}
+
+	// Check for repetition in recent chunks
+	repetitions := 0
+	totalComparisons := 0
+
+	for i := 1; i < len(recent); i++ {
+		totalComparisons++
+		if recent[i].Content == recent[i-1].Content {
+			repetitions++
+		}
+	}
+
+	// Also check for repetition with skip (e.g., every other chunk is the same)
+	for i := 2; i < len(recent); i++ {
+		totalComparisons++
+		if recent[i].Content == recent[i-2].Content {
+			repetitions++
+		}
+	}
+
+	if totalComparisons == 0 {
+		return 0.0
+	}
+
+	return float64(repetitions) / float64(totalComparisons)
 }
 
 // analyzeLengthProgression checks if content length is increasing appropriately
@@ -779,10 +834,16 @@ func (sd *StutteringDetector) analyzeContentSimilarity(current, previous string)
 }
 
 // buildReasonString builds a reason string from analysis factors
-func (sd *StutteringDetector) buildReasonString(prefix, length, timing, similarity float64) string {
+func (sd *StutteringDetector) buildReasonString(prefix, length, timing, similarity, exact, repetition float64) string {
 	reasons := []string{}
+	if exact > 0.8 {
+		reasons = append(reasons, "exact match")
+	}
 	if prefix > 0.5 {
 		reasons = append(reasons, "prefix match")
+	}
+	if repetition > 0.5 {
+		reasons = append(reasons, "repetition pattern")
 	}
 	if length < 0.3 {
 		reasons = append(reasons, "poor length progression")

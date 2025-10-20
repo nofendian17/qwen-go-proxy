@@ -216,7 +216,9 @@ func TestStreamingUseCase_ProcessStreamingResponse_CircuitOpen(t *testing.T) {
 	writer := httptest.NewRecorder()
 	ctx := context.Background()
 
-	mockLogger.EXPECT().Warn("Circuit breaker is open, rejecting request", "state", "open").Times(1)
+	// The circuit breaker check happens first, so Debug call won't be reached
+	mockLogger.EXPECT().Info("Starting streaming response processing", gomock.Any()).Times(1)
+	mockLogger.EXPECT().Warn("Circuit breaker is open, rejecting request", gomock.Any()).Times(1)
 
 	err := useCase.ProcessStreamingResponse(ctx, resp, writer)
 
@@ -454,8 +456,8 @@ func TestNewStreamingUseCase_NilLogger(t *testing.T) {
 	defer ctrl.Finish()
 
 	config := &entities.StreamingConfig{
-		MaxErrors: 5,
-		BufferSize: 4096,
+		MaxErrors:      5,
+		BufferSize:     4096,
 		TimeoutSeconds: 300,
 	}
 
@@ -498,6 +500,10 @@ func TestStreamingUseCase_ProcessStreamingResponse_NilWriter(t *testing.T) {
 	}
 
 	ctx := context.Background()
+
+	// Expect the Info call for starting processing and Debug call for setting headers
+	mockLogger.EXPECT().Info("Starting streaming response processing", gomock.Any()).Times(1)
+	mockLogger.EXPECT().Debug("Setting SSE headers").Times(1)
 
 	// Test with nil writer - should panic (documenting current behavior)
 	assert.Panics(t, func() {
@@ -558,8 +564,9 @@ func TestStreamingUseCase_ProcessStreamingResponse_ConfigWithInvalidValues(t *te
 	writer := httptest.NewRecorder()
 	ctx := context.Background()
 
-	// Expect the final Info call for streaming completion
-	mockLogger.EXPECT().Info(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	// Expect the Info call for starting processing and Debug call for setting headers
+	mockLogger.EXPECT().Info(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
 
 	// Should handle invalid config gracefully
 	err := useCase.ProcessStreamingResponse(ctx, resp, writer)
@@ -649,7 +656,7 @@ func TestStutteringDetector_AnalyzeStuttering_InvalidTimestamps(t *testing.T) {
 		SimilarityThreshold: 0.8,
 		TimeWindow:          2 * time.Second,
 		MinConfidence:       0.7,
-		ContentHistory:      []entities.ContentChunk{
+		ContentHistory: []entities.ContentChunk{
 			{
 				Content:    "test",
 				Timestamp:  time.Time{}, // Zero timestamp

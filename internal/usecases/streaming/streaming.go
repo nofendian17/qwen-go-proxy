@@ -46,31 +46,46 @@ func (uc *StreamingUseCase) ProcessStreamingResponse(
 	resp *http.Response,
 	writer http.ResponseWriter,
 ) error {
+	uc.logger.Info("Starting streaming response processing",
+		"response_status", resp.StatusCode,
+		"response_headers", resp.Header,
+		"circuit_breaker_state", uc.circuitBreaker.State.String())
+
 	// Check circuit breaker
 	if !uc.canExecute() {
-		uc.logger.Warn("Circuit breaker is open, rejecting request", "state", "open")
+		uc.logger.Warn("Circuit breaker is open, rejecting request",
+			"state", uc.circuitBreaker.State.String(),
+			"failure_count", uc.circuitBreaker.FailureCount)
 		return fmt.Errorf("circuit breaker is open, operation not allowed")
 	}
 
 	// Set headers for SSE
+	uc.logger.Debug("Setting SSE headers")
 	writer.Header().Set("Content-Type", "text/event-stream")
 	writer.Header().Set("Cache-Control", "no-cache")
 	writer.Header().Set("Connection", "keep-alive")
 	writer.WriteHeader(http.StatusOK)
+	uc.logger.Debug("SSE headers set and status code sent")
 
 	// Create stream processor
 	processor := NewStreamProcessor(uc.config, uc.stutteringDetector, uc.logger)
 
 	// Process the stream
 	reader := bufio.NewReader(resp.Body)
+	uc.logger.Debug("Starting stream processing with reader")
 	metrics, err := processor.ProcessStream(ctx, reader, writer)
 
 	// Update circuit breaker based on result
 	if err != nil {
+		uc.logger.Error("Stream processing failed",
+			"error", err,
+			"chunks_processed", metrics.ChunksProcessed,
+			"errors_encountered", metrics.ErrorsEncountered)
 		uc.recordFailure()
 		return err
 	}
 
+	uc.logger.Debug("Stream processing completed successfully")
 	uc.recordSuccess()
 
 	// Log metrics

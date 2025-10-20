@@ -187,7 +187,7 @@ func TestStreamProcessor_ProcessLine_InvalidJSON(t *testing.T) {
 
 	mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Info(gomock.Any(), gomock.Any()).AnyTimes()
-	// No Error expected for malformed JSON - it's skipped
+	mockLogger.EXPECT().Error(gomock.Any(), gomock.Any()).AnyTimes() // Added for malformed JSON logging
 
 	processor := NewStreamProcessor(config, detector, mockLogger)
 	processor.initializeState()
@@ -209,6 +209,9 @@ func TestStreamProcessor_ParseChunk(t *testing.T) {
 	mockLogger := mocks.NewMockLoggerInterface(ctrl)
 	config := &entities.StreamingConfig{}
 	detector := &entities.StutteringDetector{}
+
+	// Mock logger calls for parsing
+	mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
 
 	processor := NewStreamProcessor(config, detector, mockLogger)
 
