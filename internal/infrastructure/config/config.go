@@ -51,16 +51,6 @@ func getEnvWithDefault(key, defaultValue string) string {
 	return defaultValue
 }
 
-// getEnvInt64WithDefault gets an environment variable as int64 with a default fallback
-func getEnvInt64WithDefault(key string, defaultValue int64) int64 {
-	if value := os.Getenv(key); value != "" {
-		if parsed, err := strconv.ParseInt(value, 10, 64); err == nil {
-			return parsed
-		}
-	}
-	return defaultValue
-}
-
 // getEnvDurationWithDefault gets an environment variable as time.Duration with a default fallback
 func getEnvDurationWithDefault(key string, defaultValue time.Duration) time.Duration {
 	if value := os.Getenv(key); value != "" {
@@ -108,16 +98,6 @@ func getEnvSliceWithDefault(key string, defaultValue []string) []string {
 			}
 		}
 		return result
-	}
-	return defaultValue
-}
-
-// getEnvFloatWithDefault gets an environment variable as float64 with a default fallback
-func getEnvFloatWithDefault(key string, defaultValue float64) float64 {
-	if value := os.Getenv(key); value != "" {
-		if parsed, err := strconv.ParseFloat(value, 64); err == nil {
-			return parsed
-		}
 	}
 	return defaultValue
 }

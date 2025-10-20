@@ -325,13 +325,6 @@ func TestHelperFunctions(t *testing.T) {
 	os.Setenv("TEST_BOOL", "invalid")
 	assert.True(t, getEnvBoolWithDefault("TEST_BOOL", true))
 
-	// Test getEnvFloatWithDefault
-	assert.Equal(t, 3.14, getEnvFloatWithDefault("NONEXISTENT", 3.14))
-	os.Setenv("TEST_FLOAT", "2.71")
-	assert.Equal(t, 2.71, getEnvFloatWithDefault("TEST_FLOAT", 3.14))
-	os.Setenv("TEST_FLOAT", "invalid")
-	assert.Equal(t, 3.14, getEnvFloatWithDefault("TEST_FLOAT", 3.14))
-
 	// Test getEnvSliceWithDefault
 	assert.Equal(t, []string{"default"}, getEnvSliceWithDefault("NONEXISTENT", []string{"default"}))
 	os.Setenv("TEST_SLICE", "value")
@@ -355,7 +348,7 @@ func clearEnvVars() {
 		"STREAMING_WINDOW_SIZE", "STREAMING_SIMILARITY_THRESHOLD", "STREAMING_TIME_WINDOW",
 		"STREAMING_MIN_CONFIDENCE", "API_BASE_URL", "TRUSTED_PROXIES",
 		"ENABLE_TLS", "TLS_CERT_FILE", "TLS_KEY_FILE",
-		"TEST_VAR", "TEST_INT", "TEST_DURATION", "TEST_BOOL", "TEST_FLOAT", "TEST_SLICE",
+		"TEST_VAR", "TEST_INT", "TEST_DURATION", "TEST_BOOL", "TEST_SLICE",
 	}
 
 	for _, envVar := range envVars {
