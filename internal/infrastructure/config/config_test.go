@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"qwen-go-proxy/internal/domain/entities"
+	"qwen-go-proxy/internal/infrastructure/validation"
 )
 
 func TestLoadConfig_DefaultValues(t *testing.T) {
@@ -121,7 +122,8 @@ func TestValidateConfig_Valid(t *testing.T) {
 		APIBaseURL:                 "https://portal.qwen.ai/v1",
 	}
 
-	err := config.Validate()
+	validator := validation.NewConfigValidator()
+	err := validator.ValidateConfig(config)
 	assert.NoError(t, err)
 }
 
@@ -151,7 +153,8 @@ func TestValidateConfig_InvalidPort(t *testing.T) {
 				APIBaseURL:                 "https://portal.qwen.ai/v1",
 			}
 
-			err := config.Validate()
+			validator := validation.NewConfigValidator()
+			err := validator.ValidateConfig(config)
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.error)
 		})
@@ -190,7 +193,8 @@ func TestValidateConfig_InvalidURLs(t *testing.T) {
 				config.APIBaseURL = tt.url
 			}
 
-			err := config.Validate()
+			validator := validation.NewConfigValidator()
+			err := validator.ValidateConfig(config)
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.field)
 		})
@@ -212,7 +216,8 @@ func TestValidateConfig_InvalidLogLevel(t *testing.T) {
 		APIBaseURL:                 "https://portal.qwen.ai/v1",
 	}
 
-	err := config.Validate()
+	validator := validation.NewConfigValidator()
+	err := validator.ValidateConfig(config)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "LOG_LEVEL must be one of:")
 }
@@ -247,7 +252,8 @@ func TestValidateConfig_EmptyFields(t *testing.T) {
 
 			tt.setup(config)
 
-			err := config.Validate()
+			validator := validation.NewConfigValidator()
+			err := validator.ValidateConfig(config)
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.error)
 		})
@@ -284,7 +290,8 @@ func TestValidateConfig_InvalidValues(t *testing.T) {
 
 			tt.setup(config)
 
-			err := config.Validate()
+			validator := validation.NewConfigValidator()
+			err := validator.ValidateConfig(config)
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.error)
 		})

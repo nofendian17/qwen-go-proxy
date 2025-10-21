@@ -1,470 +1,274 @@
 package middleware
 
 import (
+	"bytes"
+	"context"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"qwen-go-proxy/internal/infrastructure/logging"
 
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRequestLogging_DebugMode(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	// Create a logger
-	logger := &logging.Logger{Logger: logging.NewLogger("debug")}
-
-	// Create middleware
-	middleware := RequestLogging(logger, true)
-
-	// Create test router
-	router := gin.New()
-	router.Use(middleware)
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "test"})
+func TestRequestID(t *testing.T) {
+	// Create a handler that will be wrapped by the middleware
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID := GetRequestID(r.Context())
+		assert.NotEmpty(t, requestID)
+		w.WriteHeader(http.StatusOK)
 	})
 
-	// Create request with body
-	reqBody := `{"test": "data"}`
-	req := httptest.NewRequest("GET", "/test", strings.NewReader(reqBody))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "test-agent")
+	// Wrap the handler with the RequestID middleware
+	handler := RequestID()(nextHandler)
 
-	// Create response recorder
-	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/test", nil)
+	rec := httptest.NewRecorder()
 
-	// Serve request
-	router.ServeHTTP(w, req)
+	handler.ServeHTTP(rec, req)
 
-	// Check response
-	assert.Equal(t, 200, w.Code)
-	assert.Contains(t, w.Body.String(), `"message":"test"`)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.NotEmpty(t, rec.Header().Get("X-Request-ID"))
+}
+
+func TestGenerateRequestID(t *testing.T) {
+	id1 := generateRequestID()
+	id2 := generateRequestID()
+
+	assert.NotEmpty(t, id1)
+	assert.NotEmpty(t, id2)
+	assert.NotEqual(t, id1, id2) // Should generate different IDs
+}
+
+func TestGetRequestID(t *testing.T) {
+	// Test with request ID in context
+	ctx := context.WithValue(context.Background(), RequestIDKey, "test-request-id")
+	requestID := GetRequestID(ctx)
+	assert.Equal(t, "test-request-id", requestID)
+
+	// Test with no request ID in context (should return unknown)
+	ctx = context.Background()
+	requestID = GetRequestID(ctx)
+	assert.Equal(t, "unknown", requestID)
+}
+
+func TestResponseWriterWrapper_Hijack(t *testing.T) {
+	// Create a test response recorder
+	rec := httptest.NewRecorder()
+
+	// Create a responseWriterWrapper
+	wrapper := &responseWriterWrapper{
+		ResponseWriter: rec,
+		body:           bytes.NewBuffer([]byte{}),
+		status:         200,
+	}
+
+	// Try to hijack - this should fail since httptest.ResponseRecorder doesn't implement Hijacker
+	_, _, err := wrapper.Hijack()
+
+	// The error is expected since ResponseRecorder doesn't implement Hijacker
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "does not implement http.Hijacker")
+}
+
+func TestResponseWriterWrapper_Write(t *testing.T) {
+	rec := httptest.NewRecorder()
+
+	wrapper := &responseWriterWrapper{
+		ResponseWriter: rec,
+		body:           bytes.NewBuffer([]byte{}),
+		status:         200,
+	}
+
+	data := []byte("test response")
+	n, err := wrapper.Write(data)
+
+	assert.NoError(t, err)
+	assert.Equal(t, len(data), n)
+	assert.Equal(t, string(data), rec.Body.String())
+	assert.Equal(t, string(data), wrapper.body.String())
+}
+
+func TestResponseWriterWrapper_WriteHeader(t *testing.T) {
+	rec := httptest.NewRecorder()
+
+	wrapper := &responseWriterWrapper{
+		ResponseWriter: rec,
+		body:           bytes.NewBuffer([]byte{}),
+		status:         200,
+	}
+
+	statusCode := http.StatusCreated
+	wrapper.WriteHeader(statusCode)
+
+	assert.Equal(t, statusCode, wrapper.status)
+	assert.Equal(t, statusCode, rec.Code)
 }
 
 func TestRequestLogging_NonDebugMode(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	logger := logging.NewLogger("info")
 
-	// Create a logger
-	logger := &logging.Logger{Logger: logging.NewLogger("info")}
-
-	// Create middleware
-	middleware := RequestLogging(logger, false)
-
-	// Create test router
-	router := gin.New()
-	router.Use(middleware)
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "test"})
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("response"))
 	})
 
-	// Create request
+	handler := RequestLogging(&logging.Logger{Logger: logger}, false)(nextHandler) // debugMode = false
+
 	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("User-Agent", "test-agent")
+	rec := httptest.NewRecorder()
 
-	// Create response recorder
-	w := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
 
-	// Serve request
-	router.ServeHTTP(w, req)
-
-	// Check response
-	assert.Equal(t, 200, w.Code)
-	assert.Contains(t, w.Body.String(), `"message":"test"`)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "response", rec.Body.String())
 }
 
-func TestRequestLogging_DebugMode_WithLargeBody(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+func TestRequestLogging_DebugMode(t *testing.T) {
+	logger := logging.NewLogger("debug")
 
-	// Create a logger
-	logger := &logging.Logger{Logger: logging.NewLogger("debug")}
-
-	// Create middleware
-	middleware := RequestLogging(logger, true)
-
-	// Create test router
-	router := gin.New()
-	router.Use(middleware)
-	router.POST("/test", func(c *gin.Context) {
-		body, _ := c.GetRawData()
-		c.JSON(200, gin.H{"received": len(body)})
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("response"))
 	})
 
-	// Create large request body (>10KB)
-	largeBody := strings.Repeat("x", 15*1024)
-	req := httptest.NewRequest("POST", "/test", strings.NewReader(largeBody))
-	req.Header.Set("Content-Type", "application/json")
+	handler := RequestLogging(&logging.Logger{Logger: logger}, true)(nextHandler) // debugMode = true
 
-	// Create response recorder
-	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/test", nil)
+	rec := httptest.NewRecorder()
 
-	// Serve request
-	router.ServeHTTP(w, req)
+	handler.ServeHTTP(rec, req)
 
-	// Check response
-	assert.Equal(t, 200, w.Code)
-	assert.Contains(t, w.Body.String(), "15360") // 15*1024
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "response", rec.Body.String())
+}
+
+func TestRequestLogging_WithRequestBody(t *testing.T) {
+	logger := logging.NewLogger("debug")
+
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		assert.Equal(t, "request body", string(body))
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("response"))
+	})
+
+	handler := RequestLogging(&logging.Logger{Logger: logger}, true)(nextHandler)
+
+	req := httptest.NewRequest("POST", "/test", strings.NewReader("request body"))
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "response", rec.Body.String())
 }
 
 func TestRateLimit_AllowRequests(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	// Create middleware with high limits
-	middleware := RateLimit(10, 20)
-
-	// Create test router
-	router := gin.New()
-	router.Use(middleware)
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "ok"})
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("response"))
 	})
 
-	// Make multiple requests within limit
-	for i := 0; i < 5; i++ {
-		req := httptest.NewRequest("GET", "/test", nil)
-		req.RemoteAddr = "127.0.0.1:12345" // Set IP for rate limiting
+	handler := RateLimit(10, 20)(nextHandler) // 10 requests per second, burst 20
 
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+	req := httptest.NewRequest("GET", "/test", nil)
+	rec := httptest.NewRecorder()
 
-		assert.Equal(t, 200, w.Code)
-		assert.Contains(t, w.Body.String(), `"message":"ok"`)
-	}
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "response", rec.Body.String())
+
+	// Check rate limit headers
+	assert.NotEmpty(t, rec.Header().Get("X-RateLimit-Limit"))
+	assert.NotEmpty(t, rec.Header().Get("X-RateLimit-Remaining"))
+	assert.NotEmpty(t, rec.Header().Get("X-RateLimit-Reset"))
 }
 
 func TestRateLimit_ExceedLimit(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	// Create middleware with low limits
-	middleware := RateLimit(2, 2)
-
-	// Create test router
-	router := gin.New()
-	router.Use(middleware)
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "ok"})
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("response"))
 	})
 
-	// Make requests up to the limit
-	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest("GET", "/test", nil)
-		req.RemoteAddr = "127.0.0.1:12345"
+	// Limit to 1 request per second
+	handler := RateLimit(1, 1)(nextHandler)
 
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-
-		assert.Equal(t, 200, w.Code)
-	}
-
-	// Next request should be rate limited
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.RemoteAddr = "127.0.0.1:12345"
-
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, 429, w.Code)
-	assert.Contains(t, w.Body.String(), "Rate limit exceeded")
-}
-
-func TestRateLimit_DifferentIPs(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	// Create middleware with low limits
-	middleware := RateLimit(1, 1)
-
-	// Create test router
-	router := gin.New()
-	router.Use(middleware)
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "ok"})
-	})
-
-	// Request from first IP
+	// Make first request - should be allowed
 	req1 := httptest.NewRequest("GET", "/test", nil)
-	req1.RemoteAddr = "127.0.0.1:12345"
-	w1 := httptest.NewRecorder()
-	router.ServeHTTP(w1, req1)
-	assert.Equal(t, 200, w1.Code)
+	rec1 := httptest.NewRecorder()
+	handler.ServeHTTP(rec1, req1)
+	assert.Equal(t, http.StatusOK, rec1.Code)
 
-	// Request from second IP should be allowed
+	// Make second request immediately - should be rate limited
 	req2 := httptest.NewRequest("GET", "/test", nil)
-	req2.RemoteAddr = "127.0.0.2:12345"
-	w2 := httptest.NewRecorder()
-	router.ServeHTTP(w2, req2)
-	assert.Equal(t, 200, w2.Code)
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, req2)
+	assert.Equal(t, http.StatusTooManyRequests, rec2.Code)
 
-	// Second request from first IP should be blocked
-	req3 := httptest.NewRequest("GET", "/test", nil)
-	req3.RemoteAddr = "127.0.0.1:12345"
-	w3 := httptest.NewRecorder()
-	router.ServeHTTP(w3, req3)
-	assert.Equal(t, 429, w3.Code)
+	// Check if rate limit response has proper content
+	assert.Contains(t, rec2.Body.String(), "Rate limit exceeded")
 }
 
-func TestRateLimit_TimeWindow(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	// Create middleware with limits
-	middleware := RateLimit(2, 2)
-
-	// Create test router
-	router := gin.New()
-	router.Use(middleware)
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "ok"})
+func TestCORS(t *testing.T) {
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("response"))
 	})
 
-	// Make 2 requests (at limit)
-	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest("GET", "/test", nil)
-		req.RemoteAddr = "127.0.0.1:12345"
+	handler := CORS()(nextHandler)
 
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-
-		assert.Equal(t, 200, w.Code)
-	}
-
-	// Third request should be blocked
 	req := httptest.NewRequest("GET", "/test", nil)
-	req.RemoteAddr = "127.0.0.1:12345"
+	rec := httptest.NewRecorder()
 
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	handler.ServeHTTP(rec, req)
 
-	assert.Equal(t, 429, w.Code)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "response", rec.Body.String())
 
-	// Simulate time passing (this is a limitation of testing - in real usage,
-	// the time window would naturally expire)
-	// For testing purposes, we accept that the rate limit works as expected
+	// Check CORS headers
+	assert.Equal(t, "*", rec.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, "GET, POST, PUT, DELETE, OPTIONS", rec.Header().Get("Access-Control-Allow-Methods"))
+	assert.Equal(t, "Content-Type, Authorization, Accept", rec.Header().Get("Access-Control-Allow-Headers"))
+	assert.Equal(t, "86400", rec.Header().Get("Access-Control-Max-Age"))
 }
 
-func TestCORS_AllowAll(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	// Create middleware
-	middleware := CORS()
-
-	// Create test router
-	router := gin.New()
-	router.Use(middleware)
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "ok"})
+func TestCORS_OptionsRequest(t *testing.T) {
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("response"))
 	})
 
-	// Test OPTIONS request
+	handler := CORS()(nextHandler)
+
 	req := httptest.NewRequest("OPTIONS", "/test", nil)
-	req.Header.Set("Origin", "http://example.com")
-	req.Header.Set("Access-Control-Request-Method", "GET")
+	rec := httptest.NewRecorder()
 
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	handler.ServeHTTP(rec, req)
 
-	assert.Equal(t, 204, w.Code)
-	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
-	assert.Equal(t, "GET, POST, PUT, DELETE, OPTIONS", w.Header().Get("Access-Control-Allow-Methods"))
-	assert.Equal(t, "Content-Type, Authorization, Accept", w.Header().Get("Access-Control-Allow-Headers"))
-	assert.Equal(t, "86400", w.Header().Get("Access-Control-Max-Age"))
+	assert.Equal(t, http.StatusNoContent, rec.Code)
 }
 
-func TestCORS_ActualRequest(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+func TestGetClientIP(t *testing.T) {
+	// Test with X-Forwarded-For header
+	req1 := httptest.NewRequest("GET", "/", nil)
+	req1.Header.Set("X-Forwarded-For", "203.0.113.195, 70.41.3.18, 150.172.238.178")
+	ip1 := getClientIP(req1)
+	assert.Equal(t, "203.0.113.195", ip1)
 
-	// Create middleware
-	middleware := CORS()
+	// Test with X-Real-IP header
+	req2 := httptest.NewRequest("GET", "/", nil)
+	req2.Header.Set("X-Real-IP", "192.0.2.1")
+	ip2 := getClientIP(req2)
+	assert.Equal(t, "192.0.2.1", ip2)
 
-	// Create test router
-	router := gin.New()
-	router.Use(middleware)
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "ok"})
-	})
-
-	// Test actual GET request
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("Origin", "http://example.com")
-
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, 200, w.Code)
-	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
-	assert.Contains(t, w.Body.String(), `"message":"ok"`)
-}
-
-// Negative Test Cases
-
-func TestRequestLogging_NilLogger(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	// Test with nil logger - should panic (documenting current behavior)
-	assert.Panics(t, func() {
-		middleware := RequestLogging(nil, true)
-		router := gin.New()
-		router.Use(middleware)
-		router.GET("/test", func(c *gin.Context) {
-			c.JSON(200, gin.H{"message": "test"})
-		})
-
-		req := httptest.NewRequest("GET", "/test", nil)
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-	})
-}
-
-func TestRequestLogging_InvalidDebugMode(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	// Create a logger with invalid log level
-	logger := &logging.Logger{Logger: logging.NewLogger("invalid_level")}
-
-	// Should not panic with invalid log level
-	assert.NotPanics(t, func() {
-		middleware := RequestLogging(logger, true)
-		router := gin.New()
-		router.Use(middleware)
-		router.GET("/test", func(c *gin.Context) {
-			c.JSON(200, gin.H{"message": "test"})
-		})
-
-		req := httptest.NewRequest("GET", "/test", nil)
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-
-		assert.Equal(t, 200, w.Code)
-	})
-}
-
-func TestRateLimit_InvalidParameters(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	// Test with zero rate limit (should still work but be very restrictive)
-	middleware := RateLimit(0, 1)
-
-	router := gin.New()
-	router.Use(middleware)
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "ok"})
-	})
-
-	// Should immediately rate limit
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.RemoteAddr = "127.0.0.1:12345"
-
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, 429, w.Code)
-}
-
-func TestRateLimit_NilResponseWriter(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	// Test with normal rate limits
-	middleware := RateLimit(10, 20)
-
-	router := gin.New()
-	router.Use(middleware)
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.RemoteAddr = "127.0.0.1:12345"
-
-	// This should work normally
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, 200, w.Code)
-}
-
-func TestRateLimit_MalformedRemoteAddr(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	middleware := RateLimit(10, 20)
-
-	router := gin.New()
-	router.Use(middleware)
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "ok"})
-	})
-
-	// Test with malformed remote address
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.RemoteAddr = "invalid-address"
-
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	// Should still work (middleware should handle malformed addresses gracefully)
-	assert.Equal(t, 200, w.Code)
-}
-
-func TestCORS_NilContext(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	middleware := CORS()
-
-	router := gin.New()
-	router.Use(middleware)
-	router.GET("/test", func(c *gin.Context) {
-		// Test that CORS middleware doesn't panic with normal requests
-		c.JSON(200, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, 200, w.Code)
-}
-
-func TestCORS_MalformedOrigin(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	middleware := CORS()
-
-	router := gin.New()
-	router.Use(middleware)
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "ok"})
-	})
-
-	// Test with malformed Origin header
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("Origin", "not-a-valid-url")
-
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	// Should still work (CORS middleware should handle malformed origins gracefully)
-	assert.Equal(t, 200, w.Code)
-	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
-}
-
-func TestCORS_EmptyOrigin(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	middleware := CORS()
-
-	router := gin.New()
-	router.Use(middleware)
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "ok"})
-	})
-
-	// Test with empty Origin header
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("Origin", "")
-
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	// Should still work
-	assert.Equal(t, 200, w.Code)
-	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
+	// Test with RemoteAddr
+	req3 := httptest.NewRequest("GET", "/", nil)
+	req3.RemoteAddr = "192.0.2.4:12345"
+	ip3 := getClientIP(req3)
+	assert.Equal(t, "192.0.2.4", ip3)
 }

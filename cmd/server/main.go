@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -9,13 +10,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gin-gonic/gin"
+	"github.com/go-chi/chi/v5"
 
 	"qwen-go-proxy/internal/infrastructure/config"
 	"qwen-go-proxy/internal/infrastructure/logging"
 	"qwen-go-proxy/internal/infrastructure/middleware"
+	"qwen-go-proxy/internal/infrastructure/repositories"
+	"qwen-go-proxy/internal/infrastructure/services"
 	"qwen-go-proxy/internal/interfaces/controllers"
-	"qwen-go-proxy/internal/interfaces/gateways"
 	"qwen-go-proxy/internal/usecases/auth"
 	"qwen-go-proxy/internal/usecases/proxy"
 	"qwen-go-proxy/internal/usecases/streaming"
@@ -30,28 +32,23 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	// Validate configuration
-	if err := cfg.Validate(); err != nil {
-		log.Fatalf("Configuration validation failed: %v", err)
-	}
-
 	// Initialize logger
 	logger := logging.NewLoggerFromConfig(cfg)
 	if logger == nil {
 		log.Fatalf("Failed to initialize logger")
 	}
 
-	// Initialize gateways
-	oauthGateway := gateways.NewOAuthGateway(cfg.QWENOAuthBaseURL)
-	qwenGateway := gateways.NewQwenAPIGateway(cfg)
+	// Initialize infrastructure services (domain interfaces)
+	oauthService := services.NewOAuthService(cfg.QWENOAuthBaseURL)
+	aiService := services.NewAIService(cfg)
 
-	// Initialize repositories
-	credentialRepo := auth.NewFileCredentialRepository(cfg.QWENDir)
+	// Initialize repository implementation (domain interface)
+	credentialRepo := repositories.NewFileCredentialRepository(cfg.QWENDir)
 
-	// Initialize use cases
-	authUseCase := auth.NewAuthUseCase(cfg, oauthGateway, credentialRepo, logger)
+	// Initialize use cases (application interfaces)
+	authUseCase := auth.NewAuthUseCase(cfg, oauthService, credentialRepo, logger)
 	streamingUseCase := streaming.NewStreamingUseCase(logger)
-	proxyUseCase := proxy.NewProxyUseCase(authUseCase, qwenGateway, streamingUseCase, logger)
+	proxyUseCase := proxy.NewProxyUseCase(authUseCase, aiService, streamingUseCase, logger)
 
 	// Initialize controllers
 	apiController := controllers.NewAPIController(proxyUseCase, logger)
@@ -61,7 +58,7 @@ func main() {
 	defer stop()
 
 	// Create router
-	router := gin.Default()
+	router := chi.NewRouter()
 
 	// Add middleware
 	router.Use(middleware.RequestID())
@@ -70,34 +67,39 @@ func main() {
 	router.Use(middleware.CORS())
 
 	// Add security headers middleware
-	router.Use(func(c *gin.Context) {
-		c.Header("X-Content-Type-Options", "nosniff")
-		c.Header("X-Frame-Options", "DENY")
-		c.Header("X-XSS-Protection", "1; mode=block")
-		c.Header("Strict-Transport-Security", "max-age=31536000")
-		c.Next()
+	router.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			w.Header().Set("X-Frame-Options", "DENY")
+			w.Header().Set("X-XSS-Protection", "1; mode=block")
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
+			next.ServeHTTP(w, r)
+		})
 	})
 
 	// Root endpoint
-	router.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "Qwen API proxy is running"})
+	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		response := map[string]interface{}{"message": "Qwen API proxy is running"}
+		json.NewEncoder(w).Encode(response)
 	})
 
 	// Health check endpoint (OpenAI compatible)
-	router.GET("/health", apiController.OpenAIHealthHandler)
+	router.Get("/health", apiController.OpenAIHealthHandler)
 
 	// Enhanced health check with system metrics
-	router.GET("/health/detailed", func(c *gin.Context) {
-		requestID := middleware.GetRequestID(c)
-		c.Header("X-Request-ID", requestID) // Ensure it's in response headers
+	router.Get("/health/detailed", func(w http.ResponseWriter, r *http.Request) {
+		requestID := middleware.GetRequestID(r.Context())
+		w.Header().Set("X-Request-ID", requestID) // Ensure it's in response headers
 
-		health := gin.H{
+		health := map[string]interface{}{
 			"status":     "healthy",
 			"timestamp":  time.Now().Unix(),
 			"version":    "1.0.0",
 			"uptime":     time.Since(startTime).String(),
 			"request_id": requestID,
-			"config": gin.H{
+			"config": map[string]interface{}{
 				"debug_mode":  cfg.DebugMode,
 				"log_level":   cfg.LogLevel,
 				"server_host": cfg.ServerHost,
@@ -117,16 +119,18 @@ func main() {
 		}
 
 		logger.Info("Health check requested", "request_id", requestID, "status", "healthy")
-		c.JSON(http.StatusOK, health)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(health)
 	})
 
 	// Authentication endpoint
-	router.GET("/auth", apiController.AuthenticateHandler)
+	router.Get("/auth", apiController.AuthenticateHandler)
 
 	// OpenAI compatible endpoints
-	router.GET("/v1/models", apiController.OpenAIModelsHandler)
-	router.POST("/v1/completions", apiController.OpenAICompletionsHandler)
-	router.POST("/v1/chat/completions", apiController.ChatCompletionsHandler)
+	router.Get("/v1/models", apiController.OpenAIModelsHandler)
+	router.Post("/v1/completions", apiController.OpenAICompletionsHandler)
+	router.Post("/v1/chat/completions", apiController.ChatCompletionsHandler)
 
 	// Startup authentication check
 	logger.Info("Starting Qwen Proxy")

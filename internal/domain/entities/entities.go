@@ -1,10 +1,9 @@
-// Package entities contains domain entities and data structures for the Qwen API proxy.
-// This package defines the core business objects and their validation rules.
+// Package entities contains pure domain entities and data structures for the Qwen API proxy.
+// This package defines the core business objects without any infrastructure dependencies.
 package entities
 
 import (
 	"fmt"
-	"net/url"
 	"time"
 )
 
@@ -18,27 +17,17 @@ type Credentials struct {
 	ResourceURL  string `json:"resource_url,omitempty"`
 }
 
-// IsExpired checks if the credentials have expired with a buffer for token refresh
-func (c *Credentials) IsExpired() bool {
-	if c == nil || c.ExpiryDate == 0 {
-		return true
-	}
-	// Add 5-minute buffer for token refresh
-	buffer := time.Now().Add(5 * time.Minute).UnixMilli()
-	return c.ExpiryDate <= buffer
-}
-
-// Sanitize returns a safe representation of credentials for logging (without sensitive data)
-func (c *Credentials) Sanitize() map[string]interface{} {
+// Sanitize returns a safe representation of credentials for logging (without sensitive data).
+// This is a domain method that doesn't depend on external infrastructure.
+func (c *Credentials) Sanitize() map[string]any {
 	if c == nil {
 		return nil
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"token_type":   c.TokenType,
 		"expiry_date":  c.ExpiryDate,
 		"resource_url": c.ResourceURL,
 		"has_token":    c.AccessToken != "",
-		"is_expired":   c.IsExpired(),
 	}
 }
 
@@ -83,92 +72,8 @@ type Config struct {
 	TLSKeyFile     string   `json:"tls_key_file" env:"TLS_KEY_FILE"`
 }
 
-// Validate checks if the configuration is valid and has all required fields
-func (c *Config) Validate() error {
-	if c == nil {
-		return fmt.Errorf("config is nil")
-	}
-
-	// Validate server port is in valid range (1-65535)
-	if c.ServerPort < 1 || c.ServerPort > 65535 {
-		return fmt.Errorf("SERVER_PORT must be a valid port number (1-65535), got: %d", c.ServerPort)
-	}
-
-	if c.QWENOAuthBaseURL == "" {
-		return fmt.Errorf("QWEN_OAUTH_BASE_URL cannot be empty")
-	}
-
-	if c.QWENOAuthClientID == "" {
-		return fmt.Errorf("QWEN_OAUTH_CLIENT_ID cannot be empty")
-	}
-
-	if c.QWENOAuthDeviceAuthURL == "" {
-		return fmt.Errorf("QWEN_OAUTH_DEVICE_AUTH_URL cannot be empty")
-	}
-
-	if c.APIBaseURL == "" {
-		return fmt.Errorf("API_BASE_URL cannot be empty")
-	}
-
-	if c.QWENDir == "" {
-		return fmt.Errorf("QWEN_DIR cannot be empty")
-	}
-
-	if c.TokenRefreshBuffer < 0 {
-		return fmt.Errorf("TOKEN_REFRESH_BUFFER must be non-negative")
-	}
-
-	if c.ShutdownTimeout < 0 {
-		return fmt.Errorf("SHUTDOWN_TIMEOUT must be non-negative")
-	}
-
-	if c.RateLimitRequestsPerSecond <= 0 {
-		return fmt.Errorf("RATE_LIMIT_REQUESTS_PER_SECOND must be positive")
-	}
-
-	if c.RateLimitBurst <= 0 {
-		return fmt.Errorf("RATE_LIMIT_BURST must be positive")
-	}
-
-	if c.LogLevel == "" {
-		return fmt.Errorf("LOG_LEVEL cannot be empty")
-	}
-
-	// Validate log level
-	validLogLevels := []string{"debug", "info", "warn", "error", "fatal"}
-	if !contains(validLogLevels, c.LogLevel) {
-		return fmt.Errorf("LOG_LEVEL must be one of: %v, got: %s", validLogLevels, c.LogLevel)
-	}
-
-	// Validate URLs
-	if _, err := url.Parse(c.QWENOAuthBaseURL); err != nil {
-		return fmt.Errorf("QWEN_OAUTH_BASE_URL is not a valid URL: %w", err)
-	}
-	if parsed, err := url.Parse(c.QWENOAuthBaseURL); err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return fmt.Errorf("QWEN_OAUTH_BASE_URL must be a valid absolute URL with scheme and host")
-	}
-
-	if _, err := url.Parse(c.APIBaseURL); err != nil {
-		return fmt.Errorf("API_BASE_URL is not a valid URL: %w", err)
-	}
-	if parsed, err := url.Parse(c.APIBaseURL); err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return fmt.Errorf("API_BASE_URL must be a valid absolute URL with scheme and host")
-	}
-
-	return nil
-}
-
-// contains checks if a slice contains a specific string
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
-}
-
-// GetServerAddress returns the full server address for HTTP server configuration
+// GetServerAddress returns the full server address for HTTP server configuration.
+// This is a domain helper method that formats the address.
 func (c *Config) GetServerAddress() string {
 	if c == nil {
 		return ":8080"
@@ -196,7 +101,8 @@ type CompletionRequest struct {
 	Seed             *int           `json:"seed,omitempty"`
 }
 
-// ChatCompletionRequest represents a chat completion request with validation
+// ChatCompletionRequest represents a chat completion request.
+// This entity contains the data structure for chat completion API requests.
 type ChatCompletionRequest struct {
 	Model            string          `json:"model,omitempty" validate:"omitempty,min=1,max=100"`
 	Messages         []ChatMessage   `json:"messages" validate:"required,min=1,dive"`
@@ -214,80 +120,22 @@ type ChatCompletionRequest struct {
 	ResponseFormat   *ResponseFormat `json:"response_format,omitempty"`
 	Seed             *int            `json:"seed,omitempty"`
 	Tools            []Tool          `json:"tools,omitempty" validate:"omitempty,dive"`
-	ToolChoice       interface{}     `json:"tool_choice,omitempty"` // string or ToolChoice
+	ToolChoice       any             `json:"tool_choice,omitempty"` // string or ToolChoice
 	ReasoningEffort  string          `json:"reasoning_effort,omitempty" validate:"omitempty,oneof=low medium high"`
 	IncludeReasoning bool            `json:"include_reasoning,omitempty"`
 	StreamOptions    *StreamOptions  `json:"stream_options,omitempty"`
 }
 
-// Validate checks if the chat completion request is valid
-func (r *ChatCompletionRequest) Validate() error {
-	if r == nil {
-		return fmt.Errorf("chat completion request is nil")
-	}
-
-	if len(r.Messages) == 0 {
-		return fmt.Errorf("messages are required")
-	}
-
-	// Validate each message
-	for i, msg := range r.Messages {
-		if err := msg.Validate(); err != nil {
-			return fmt.Errorf("message %d is invalid: %w", i, err)
-		}
-	}
-
-	if r.MaxTokens < 0 {
-		return fmt.Errorf("max_tokens must be non-negative")
-	}
-
-	if r.Temperature < 0 || r.Temperature > 2 {
-		return fmt.Errorf("temperature must be between 0 and 2")
-	}
-
-	if r.TopP < 0 || r.TopP > 1 {
-		return fmt.Errorf("top_p must be between 0 and 1")
-	}
-
-	return nil
-}
-
-// ChatMessage represents a message in chat completion with validation
+// ChatMessage represents a message in chat completion.
+// This entity contains the message structure for chat conversations.
 type ChatMessage struct {
 	Role      string      `json:"role" validate:"required,oneof=system user assistant tool"`
-	Content   interface{} `json:"content" validate:"required"` // Can be string or []ContentBlock
+	Content   any         `json:"content" validate:"required"` // Can be string or []ContentBlock
 	ToolCalls []ToolCall  `json:"tool_calls,omitempty" validate:"omitempty,dive"`
 }
 
-// Validate checks if the chat message is valid
-func (m *ChatMessage) Validate() error {
-	if m == nil {
-		return fmt.Errorf("chat message is nil")
-	}
-
-	if m.Role == "" {
-		return fmt.Errorf("role is required")
-	}
-
-	validRoles := map[string]bool{
-		"system":    true,
-		"user":      true,
-		"assistant": true,
-		"tool":      true,
-	}
-
-	if !validRoles[m.Role] {
-		return fmt.Errorf("invalid role: %s (must be system, user, assistant, or tool)", m.Role)
-	}
-
-	if m.Content == nil || m.Content == "" {
-		return fmt.Errorf("content is required")
-	}
-
-	return nil
-}
-
-// ToolCall represents a tool call in a message
+// ToolCall represents a tool call in a message.
+// This entity represents function calling specifications.
 type ToolCall struct {
 	ID       string   `json:"id"`
 	Type     string   `json:"type"`

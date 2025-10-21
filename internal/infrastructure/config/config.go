@@ -9,6 +9,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"qwen-go-proxy/internal/domain/entities"
+	"qwen-go-proxy/internal/infrastructure/validation"
 )
 
 // LoadConfig loads configuration from environment variables with defaults and validation
@@ -38,6 +39,12 @@ func LoadConfig() (*entities.Config, error) {
 		EnableTLS:                  getEnvBoolWithDefault("ENABLE_TLS", false),
 		TLSCertFile:                getEnvWithDefault("TLS_CERT_FILE", ""),
 		TLSKeyFile:                 getEnvWithDefault("TLS_KEY_FILE", ""),
+	}
+
+	// Validate the configuration using the infrastructure validation
+	validator := validation.NewConfigValidator()
+	if err := validator.ValidateConfig(config); err != nil {
+		return nil, err
 	}
 
 	return config, nil

@@ -1,4 +1,6 @@
-package gateways
+// Package services contains infrastructure implementations of external service interfaces.
+// This package provides concrete implementations for communicating with external APIs.
+package services
 
 import (
 	"bytes"
@@ -10,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -22,116 +23,17 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// QwenAPIGateway extends the domain AIService interface
-type QwenAPIGateway interface {
-	interfaces.AIService
-}
-
-// QwenAPIGatewayImpl implements QwenAPIGateway (and thus AIService)
-type QwenAPIGatewayImpl struct {
-	httpClient *http.Client
-	config     *entities.Config
-}
-
-// NewQwenAPIGateway creates a new Qwen API gateway
-func NewQwenAPIGateway(config *entities.Config) QwenAPIGateway {
-	return &QwenAPIGatewayImpl{
-		httpClient: &http.Client{
-			Timeout: 300 * time.Second, // DefaultHTTPTimeout
-			Transport: &http.Transport{
-				MaxIdleConns:        100,
-				MaxIdleConnsPerHost: 10,
-				IdleConnTimeout:     90 * time.Second,
-			},
-		},
-		config: config,
-	}
-}
-
-// ChatCompletions makes a chat completion request to Qwen API
-func (g *QwenAPIGatewayImpl) ChatCompletions(req *entities.ChatCompletionRequest, credentials *entities.Credentials) (*http.Response, error) {
-	baseURL, err := g.GetBaseURL(credentials, g.config.APIBaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get base URL: %w", err)
-	}
-
-	qwenURL := baseURL + "/chat/completions"
-
-	bodyBytes, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	httpReq, err := http.NewRequest("POST", qwenURL, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+credentials.AccessToken)
-
-	return g.httpClient.Do(httpReq)
-}
-
-// GetBaseURL returns the base URL for API calls
-func (g *QwenAPIGatewayImpl) GetBaseURL(credentials *entities.Credentials, defaultURL string) (string, error) {
-	baseURL := defaultURL
-	if credentials != nil && credentials.ResourceURL != "" {
-		baseURL = credentials.ResourceURL
-	}
-
-	// Validate URL format
-	if baseURL == "" {
-		return "", fmt.Errorf("base URL cannot be empty")
-	}
-
-	// Check if URL has a valid scheme
-	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
-		// Check if the URL already has a malformed scheme (like "://")
-		if strings.Contains(baseURL, "://") {
-			return "", fmt.Errorf("failed to parse resource URL: invalid URL format")
-		}
-		baseURL = "https://" + baseURL
-	}
-
-	// Parse the URL to validate its format
-	parsedURL, err := url.Parse(baseURL)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse resource URL: %w", err)
-	}
-
-	// Additional validation: ensure the URL has a valid scheme and host
-	if parsedURL.Scheme == "" {
-		return "", fmt.Errorf("failed to parse resource URL: missing scheme")
-	}
-	if parsedURL.Host == "" {
-		return "", fmt.Errorf("failed to parse resource URL: missing host")
-	}
-
-	if !strings.HasSuffix(baseURL, "/v1") {
-		baseURL += "/v1"
-	}
-
-	return baseURL, nil
-}
-
-// OAuthGateway defines the interface for OAuth interactions
-// This interface extends the domain OAuthService interface
-type OAuthGateway interface {
-	interfaces.OAuthService
-}
-
-// OAuthGatewayImpl implements OAuthGateway
-type OAuthGatewayImpl struct {
+// OAuthService implements the OAuthService interface for OAuth2 operations.
+type OAuthService struct {
 	httpClient    *http.Client
 	baseURL       string
 	deviceAuthURL string
 	tokenURL      string
 }
 
-// NewOAuthGateway creates a new OAuth gateway
-func NewOAuthGateway(baseURL string) OAuthGateway {
-	return &OAuthGatewayImpl{
+// NewOAuthService creates a new OAuth service implementation.
+func NewOAuthService(baseURL string) interfaces.OAuthService {
+	return &OAuthService{
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second, // TokenRefreshTimeout
 		},
@@ -141,14 +43,14 @@ func NewOAuthGateway(baseURL string) OAuthGateway {
 	}
 }
 
-// RefreshToken refreshes the access token using the refresh token
-func (g *OAuthGatewayImpl) RefreshToken(refreshToken, clientID string) (*entities.Credentials, error) {
+// RefreshToken refreshes the access token using the refresh token.
+func (s *OAuthService) RefreshToken(refreshToken, clientID string) (*entities.Credentials, error) {
 	// Prepare form data
 	data := fmt.Sprintf("grant_type=refresh_token&refresh_token=%s&client_id=%s",
 		refreshToken, clientID)
 
 	// Create request
-	req, err := http.NewRequest("POST", g.baseURL+"/api/v1/oauth2/token", strings.NewReader(data))
+	req, err := http.NewRequest("POST", s.baseURL+"/api/v1/oauth2/token", strings.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -157,7 +59,7 @@ func (g *OAuthGatewayImpl) RefreshToken(refreshToken, clientID string) (*entitie
 	req.Header.Set("Accept", "application/json")
 
 	// Send request
-	resp, err := g.httpClient.Do(req)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
@@ -197,14 +99,14 @@ func (g *OAuthGatewayImpl) RefreshToken(refreshToken, clientID string) (*entitie
 	}, nil
 }
 
-// AuthenticateWithDeviceFlow performs OAuth2 device authorization flow with PKCE
-func (g *OAuthGatewayImpl) AuthenticateWithDeviceFlow(clientID, scope string) (*entities.Credentials, error) {
+// AuthenticateWithDeviceFlow performs OAuth2 device authorization flow with PKCE.
+func (s *OAuthService) AuthenticateWithDeviceFlow(clientID, scope string) (*entities.Credentials, error) {
 	conf := &oauth2.Config{
 		ClientID: clientID,
 		Scopes:   []string{scope},
 		Endpoint: oauth2.Endpoint{
-			TokenURL:      g.tokenURL,
-			DeviceAuthURL: g.deviceAuthURL,
+			TokenURL:      s.tokenURL,
+			DeviceAuthURL: s.deviceAuthURL,
 		},
 	}
 
@@ -261,6 +163,78 @@ func (g *OAuthGatewayImpl) AuthenticateWithDeviceFlow(clientID, scope string) (*
 	fmt.Println("Authentication successful! Credentials obtained.")
 	return creds, nil
 }
+
+// AIService implements the AIService interface for AI API operations.
+type AIService struct {
+	httpClient *http.Client
+	config     *entities.Config
+}
+
+// NewAIService creates a new AI service implementation.
+func NewAIService(config *entities.Config) interfaces.AIService {
+	return &AIService{
+		httpClient: &http.Client{
+			Timeout: 300 * time.Second, // DefaultHTTPTimeout
+			Transport: &http.Transport{
+				MaxIdleConns:        100,
+				MaxIdleConnsPerHost: 10,
+				IdleConnTimeout:     90 * time.Second,
+			},
+		},
+		config: config,
+	}
+}
+
+// ChatCompletions makes a chat completion request to the AI API.
+func (s *AIService) ChatCompletions(req *entities.ChatCompletionRequest, credentials *entities.Credentials) (*http.Response, error) {
+	if req == nil {
+		return nil, fmt.Errorf("request cannot be nil")
+	}
+
+	baseURL, err := s.GetBaseURL(credentials, s.config.APIBaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get base URL: %w", err)
+	}
+
+	qwenURL := baseURL + "/chat/completions"
+
+	bodyBytes, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequest("POST", qwenURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	if credentials != nil {
+		httpReq.Header.Set("Authorization", "Bearer "+credentials.AccessToken)
+	}
+
+	return s.httpClient.Do(httpReq)
+}
+
+// GetBaseURL returns the base URL for API calls.
+func (s *AIService) GetBaseURL(credentials *entities.Credentials, defaultURL string) (string, error) {
+	baseURL := defaultURL
+	if credentials != nil && credentials.ResourceURL != "" {
+		baseURL = credentials.ResourceURL
+	}
+
+	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
+		baseURL = "https://" + baseURL
+	}
+
+	if !strings.HasSuffix(baseURL, "/v1") {
+		baseURL += "/v1"
+	}
+
+	return baseURL, nil
+}
+
+// Helper functions
 
 // openBrowser opens the default browser with the given URL.
 func openBrowser(url string) error {

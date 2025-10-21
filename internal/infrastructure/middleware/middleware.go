@@ -11,10 +11,9 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
-
-	"github.com/gin-gonic/gin"
 
 	"qwen-go-proxy/internal/infrastructure/logging"
 )
@@ -26,9 +25,9 @@ const (
 	RequestIDKey contextKey = "request_id"
 )
 
-// responseWriterWrapper wraps gin.ResponseWriter to capture response body and headers
+// responseWriterWrapper wraps http.ResponseWriter to capture response body and headers
 type responseWriterWrapper struct {
-	gin.ResponseWriter
+	http.ResponseWriter
 	body   *bytes.Buffer
 	status int
 }
@@ -51,112 +50,121 @@ func (rw *responseWriterWrapper) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 }
 
 // RequestLogging returns request logging middleware
-func RequestLogging(logger *logging.Logger, debugMode bool) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		start := time.Now()
-		path := c.Request.URL.Path
-		raw := c.Request.URL.RawQuery
-		requestID := GetRequestID(c)
+func RequestLogging(logger *logging.Logger, debugMode bool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			path := r.URL.Path
+			raw := r.URL.RawQuery
+			requestID := GetRequestID(r.Context())
 
-		// Enhanced request logging in debug mode
-		if debugMode {
-			// Log comprehensive request details
-			logger.Debug("Debug request started",
-				"request_id", requestID,
-				"method", c.Request.Method,
-				"url", c.Request.URL.String(),
-				"host", c.Request.Host,
-				"headers", c.Request.Header,
-				"content_length", c.Request.ContentLength)
+			// Enhanced request logging in debug mode
+			if debugMode {
+				// Log comprehensive request details
+				logger.Debug("Debug request started",
+					"request_id", requestID,
+					"method", r.Method,
+					"url", r.URL.String(),
+					"host", r.Host,
+					"headers", r.Header,
+					"content_length", r.ContentLength)
 
-			// Log request body for debugging (be careful with large payloads)
-			if c.Request.Body != nil {
-				bodyBytes, err := io.ReadAll(c.Request.Body)
-				if err != nil {
-					logger.Debug("Error reading request body", "request_id", requestID, "error", err)
-				} else if len(bodyBytes) > 0 && len(bodyBytes) < 1024*10 { // Only log if under 10KB
-					logger.Debug("Request body", "request_id", requestID, "size", len(bodyBytes), "body", string(bodyBytes))
-				} else if len(bodyBytes) >= 1024*10 {
-					logger.Debug("Request body too large to log", "request_id", requestID, "size", len(bodyBytes))
-				}
-				// Always restore the request body for further processing
-				c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-			} else {
-				logger.Debug("Request body empty", "request_id", requestID)
-			}
-		} else {
-			logger.Info("Request started", "request_id", requestID, "method", c.Request.Method, "path", path)
-		}
-
-		// Wrap response writer to capture response details in debug mode
-		var responseWrapper *responseWriterWrapper
-		if debugMode {
-			responseWrapper = &responseWriterWrapper{
-				ResponseWriter: c.Writer,
-				body:           bytes.NewBuffer([]byte{}),
-				status:         200, // default status
-			}
-			c.Writer = responseWrapper
-		}
-
-		// Process request
-		c.Next()
-
-		// Enhanced response logging
-		end := time.Now()
-		latency := end.Sub(start)
-
-		if raw != "" {
-			path = path + "?" + raw
-		}
-
-		statusCode := c.Writer.Status()
-
-		if debugMode {
-			// Log comprehensive response details
-			headers := make(map[string][]string)
-			for key, values := range c.Writer.Header() {
-				headers[key] = values
-			}
-
-			logger.Debug("Debug response completed",
-				"request_id", requestID,
-				"status", statusCode,
-				"latency", latency,
-				"headers", headers)
-
-			// Log response body (if captured)
-			if responseWrapper != nil && responseWrapper.body.Len() > 0 {
-				responseBody := responseWrapper.body.String()
-				if len(responseBody) > 1024*5 { // Limit body logging to 5KB
-					logger.Debug("Response body truncated", "request_id", requestID, "size", len(responseBody), "body", responseBody[:1024*5]+"...")
+				// Log request body for debugging (be careful with large payloads)
+				if r.Body != nil {
+					bodyBytes, err := io.ReadAll(r.Body)
+					if err != nil {
+						logger.Debug("Error reading request body", "request_id", requestID, "error", err)
+					} else if len(bodyBytes) > 0 && len(bodyBytes) < 1024*10 { // Only log if under 10KB
+						logger.Debug("Request body", "request_id", requestID, "size", len(bodyBytes), "body", string(bodyBytes))
+					} else if len(bodyBytes) >= 1024*10 {
+						logger.Debug("Request body too large to log", "request_id", requestID, "size", len(bodyBytes))
+					}
+					// Always restore the request body for further processing
+					r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 				} else {
-					logger.Debug("Response body", "request_id", requestID, "size", len(responseBody), "body", responseBody)
+					logger.Debug("Request body empty", "request_id", requestID)
+				}
+			} else {
+				logger.Info("Request started", "request_id", requestID, "method", r.Method, "path", path)
+			}
+
+			// Wrap response writer to capture response details in debug mode
+			var responseWrapper *responseWriterWrapper
+			if debugMode {
+				responseWrapper = &responseWriterWrapper{
+					ResponseWriter: w,
+					body:           bytes.NewBuffer([]byte{}),
+					status:         200, // default status
+				}
+				w = responseWrapper
+			}
+
+			// Create a new request with the wrapped writer
+			next.ServeHTTP(w, r)
+
+			// Enhanced response logging
+			end := time.Now()
+			latency := end.Sub(start)
+
+			if raw != "" {
+				path = path + "?" + raw
+			}
+
+			var statusCode int
+			if responseWrapper != nil {
+				statusCode = responseWrapper.status
+			}
+			if statusCode == 0 { // fallback if wrapper wasn't used
+				if wrappedWriter, ok := w.(*responseWriterWrapper); ok {
+					statusCode = wrappedWriter.status
 				}
 			}
-		} else {
-			logger.Info("Request completed", "request_id", requestID, "status", statusCode, "path", path, "latency", latency)
-		}
+			if statusCode == 0 { // final fallback
+				statusCode = 200
+			}
+
+			if debugMode {
+				// Log comprehensive response details
+				headers := w.Header()
+
+				logger.Debug("Debug response completed",
+					"request_id", requestID,
+					"status", statusCode,
+					"latency", latency,
+					"headers", headers)
+
+				// Log response body (if captured)
+				if responseWrapper != nil && responseWrapper.body.Len() > 0 {
+					responseBody := responseWrapper.body.String()
+					if len(responseBody) > 1024*5 { // Limit body logging to 5KB
+						logger.Debug("Response body truncated", "request_id", requestID, "size", len(responseBody), "body", responseBody[:1024*5]+"...")
+					} else {
+						logger.Debug("Response body", "request_id", requestID, "size", len(responseBody), "body", responseBody)
+					}
+				}
+			} else {
+				logger.Info("Request completed", "request_id", requestID, "status", statusCode, "path", path, "latency", latency)
+			}
+		})
 	}
 }
 
 // RequestID adds a unique request ID to each request for tracing and debugging
-func RequestID() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// Generate a unique request ID
-		requestID := generateRequestID()
+func RequestID() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Generate a unique request ID
+			requestID := generateRequestID()
 
-		// Add to response header
-		c.Header("X-Request-ID", requestID)
+			// Add to response header
+			w.Header().Set("X-Request-ID", requestID)
 
-		// Add to gin context for use in handlers
-		c.Set("request_id", requestID)
+			// Add to request context for propagation
+			ctx := context.WithValue(r.Context(), RequestIDKey, requestID)
+			r = r.WithContext(ctx)
 
-		// Add to request context for propagation
-		ctx := context.WithValue(c.Request.Context(), RequestIDKey, requestID)
-		c.Request = c.Request.WithContext(ctx)
-
-		c.Next()
+			next.ServeHTTP(w, r)
+		})
 	}
 }
 
@@ -170,16 +178,9 @@ func generateRequestID() string {
 	return hex.EncodeToString(bytes)
 }
 
-// GetRequestID retrieves the request ID from gin context
-func GetRequestID(c *gin.Context) string {
-	if requestID, exists := c.Get("request_id"); exists {
-		if id, ok := requestID.(string); ok {
-			return id
-		}
-	}
-
-	// Also check in request context using our custom type
-	if ctxRequestID := c.Request.Context().Value(RequestIDKey); ctxRequestID != nil {
+// GetRequestID retrieves the request ID from context
+func GetRequestID(ctx context.Context) string {
+	if ctxRequestID := ctx.Value(RequestIDKey); ctxRequestID != nil {
 		if id, ok := ctxRequestID.(string); ok {
 			return id
 		}
@@ -188,7 +189,7 @@ func GetRequestID(c *gin.Context) string {
 }
 
 // RateLimit implements rate limiting middleware with improved concurrency and cleanup
-func RateLimit(requestsPerSecond int, burst int) gin.HandlerFunc {
+func RateLimit(requestsPerSecond int, burst int) func(http.Handler) http.Handler {
 	// Use sync.Map for concurrent access without global mutex bottleneck
 	var requestCounts sync.Map
 
@@ -217,63 +218,59 @@ func RateLimit(requestsPerSecond int, burst int) gin.HandlerFunc {
 		}
 	}()
 
-	return func(c *gin.Context) {
-		clientIP := c.ClientIP()
-		now := time.Now()
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			clientIP := getClientIP(r)
+			now := time.Now()
 
-		// Get or create tracker for this IP
-		trackerValue, _ := requestCounts.LoadOrStore(clientIP, &RequestTracker{
-			Requests: make([]time.Time, 0, burst),
-			Mu:       &sync.Mutex{},
-		})
-		tracker := trackerValue.(*RequestTracker)
-
-		tracker.Mu.Lock()
-
-		// Remove requests older than 1 second (sliding window)
-		cutoff := now.Add(-time.Second)
-		validRequests := make([]time.Time, 0, len(tracker.Requests))
-		for _, reqTime := range tracker.Requests {
-			if reqTime.After(cutoff) {
-				validRequests = append(validRequests, reqTime)
-			}
-		}
-		tracker.Requests = validRequests
-
-		// Check if we've exceeded the rate limit
-		if len(tracker.Requests) >= requestsPerSecond {
-			tracker.Mu.Unlock()
-			c.Header("X-RateLimit-Limit", fmt.Sprintf("%d", requestsPerSecond))
-			c.Header("X-RateLimit-Remaining", "0")
-			c.Header("X-RateLimit-Reset", fmt.Sprintf("%d", now.Add(time.Second).Unix()))
-			c.Header("Retry-After", "1")
-
-			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error": gin.H{
-					"message": "Rate limit exceeded",
-					"type":    "rate_limit_error",
-					"code":    "rate_limit_exceeded",
-				},
+			// Get or create tracker for this IP
+			trackerValue, _ := requestCounts.LoadOrStore(clientIP, &RequestTracker{
+				Requests: make([]time.Time, 0, burst),
+				Mu:       &sync.Mutex{},
 			})
-			c.Abort()
-			return
-		}
+			tracker := trackerValue.(*RequestTracker)
 
-		// Add current request
-		tracker.Requests = append(tracker.Requests, now)
-		remaining := requestsPerSecond - len(tracker.Requests)
-		if remaining < 0 {
-			remaining = 0
-		}
+			tracker.Mu.Lock()
 
-		tracker.Mu.Unlock()
+			// Remove requests older than 1 second (sliding window)
+			cutoff := now.Add(-time.Second)
+			validRequests := make([]time.Time, 0, len(tracker.Requests))
+			for _, reqTime := range tracker.Requests {
+				if reqTime.After(cutoff) {
+					validRequests = append(validRequests, reqTime)
+				}
+			}
+			tracker.Requests = validRequests
 
-		// Set rate limit headers
-		c.Header("X-RateLimit-Limit", fmt.Sprintf("%d", requestsPerSecond))
-		c.Header("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
-		c.Header("X-RateLimit-Reset", fmt.Sprintf("%d", now.Add(time.Second).Unix()))
+			// Check if we've exceeded the rate limit
+			if len(tracker.Requests) >= requestsPerSecond {
+				tracker.Mu.Unlock()
+				w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", requestsPerSecond))
+				w.Header().Set("X-RateLimit-Remaining", "0")
+				w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", now.Add(time.Second).Unix()))
+				w.Header().Set("Retry-After", "1")
 
-		c.Next()
+				w.WriteHeader(http.StatusTooManyRequests)
+				w.Write([]byte(`{"error": {"message": "Rate limit exceeded", "type": "rate_limit_error", "code": "rate_limit_exceeded"}}`))
+				return
+			}
+
+			// Add current request
+			tracker.Requests = append(tracker.Requests, now)
+			remaining := requestsPerSecond - len(tracker.Requests)
+			if remaining < 0 {
+				remaining = 0
+			}
+
+			tracker.Mu.Unlock()
+
+			// Set rate limit headers
+			w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", requestsPerSecond))
+			w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
+			w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", now.Add(time.Second).Unix()))
+
+			next.ServeHTTP(w, r)
+		})
 	}
 }
 
@@ -284,18 +281,44 @@ type RequestTracker struct {
 }
 
 // CORS returns CORS middleware
-func CORS() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept")
-		c.Header("Access-Control-Max-Age", "86400")
+func CORS() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept")
+			w.Header().Set("Access-Control-Max-Age", "86400")
 
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(http.StatusNoContent)
-			return
-		}
+			if r.Method == "OPTIONS" {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
 
-		c.Next()
+			next.ServeHTTP(w, r)
+		})
 	}
+}
+
+// getClientIP extracts the real client IP address from the request
+func getClientIP(r *http.Request) string {
+	// Check X-Forwarded-For header
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		// X-Forwarded-For can contain multiple IPs, the first one is the original client
+		if idx := strings.Index(xff, ","); idx != -1 {
+			return strings.TrimSpace(xff[:idx])
+		}
+		return strings.TrimSpace(xff)
+	}
+
+	// Check X-Real-IP header
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return strings.TrimSpace(xri)
+	}
+
+	// Fall back to RemoteAddr
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return ip
 }

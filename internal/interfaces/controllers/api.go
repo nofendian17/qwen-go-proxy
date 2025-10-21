@@ -1,13 +1,13 @@
 package controllers
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 
-	"github.com/gin-gonic/gin"
-
 	"qwen-go-proxy/internal/domain/entities"
 	"qwen-go-proxy/internal/infrastructure/logging"
+	"qwen-go-proxy/internal/infrastructure/middleware"
 	"qwen-go-proxy/internal/usecases/proxy"
 )
 
@@ -68,65 +68,75 @@ func NewAPIController(proxyUseCase proxy.ProxyUseCaseInterface, logger logging.L
 }
 
 // sendErrorResponse sends a standardized error response
-func (ctrl *APIController) sendErrorResponse(c *gin.Context, statusCode int, errorType, message string) {
-	requestID := c.GetString("request_id")
+func (ctrl *APIController) sendErrorResponse(w http.ResponseWriter, r *http.Request, statusCode int, errorType, message string) {
+	requestID := middleware.GetRequestID(r.Context())
 	if requestID == "" {
 		requestID = "unknown"
 	}
 	ctrl.logger.Error("API error response", "request_id", requestID, "status", statusCode, "type", errorType, "message", message)
-	c.JSON(statusCode, gin.H{
-		"error": gin.H{
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+
+	errorResponse := map[string]interface{}{
+		"error": map[string]interface{}{
 			"message": message,
 			"type":    errorType,
 			"code":    statusCode,
 		},
-	})
+	}
+	json.NewEncoder(w).Encode(errorResponse)
 }
 
 // sendValidationError sends a validation error response
-func (ctrl *APIController) sendValidationError(c *gin.Context, message string) {
-	ctrl.sendErrorResponse(c, StatusBadRequest, ErrorTypeInvalidRequest, message)
+func (ctrl *APIController) sendValidationError(w http.ResponseWriter, r *http.Request, message string) {
+	ctrl.sendErrorResponse(w, r, StatusBadRequest, ErrorTypeInvalidRequest, message)
 }
 
 // sendInternalError sends an internal server error response
-func (ctrl *APIController) sendInternalError(c *gin.Context, err error) {
-	requestID := c.GetString("request_id")
+func (ctrl *APIController) sendInternalError(w http.ResponseWriter, r *http.Request, err error) {
+	requestID := middleware.GetRequestID(r.Context())
 	if requestID == "" {
 		requestID = "unknown"
 	}
 	ctrl.logger.Error("Internal server error", "request_id", requestID, "error", err)
-	ctrl.sendErrorResponse(c, StatusInternalServerError, ErrorTypeInternal, ErrMsgInternalError)
+	ctrl.sendErrorResponse(w, r, StatusInternalServerError, ErrorTypeInternal, ErrMsgInternalError)
 }
 
 // validateJSONRequest validates and binds JSON request
-func (ctrl *APIController) validateJSONRequest(c *gin.Context, target interface{}) bool {
-	if err := c.ShouldBindJSON(target); err != nil {
-		requestID := c.GetString("request_id")
+func (ctrl *APIController) validateJSONRequest(w http.ResponseWriter, r *http.Request, target interface{}) bool {
+	if err := json.NewDecoder(r.Body).Decode(target); err != nil {
+		requestID := middleware.GetRequestID(r.Context())
 		if requestID == "" {
 			requestID = "unknown"
 		}
 		ctrl.logger.Error("JSON binding failed", "request_id", requestID, "error", err)
-		ctrl.sendValidationError(c, ErrMsgInvalidJSON)
+		ctrl.sendValidationError(w, r, ErrMsgInvalidJSON)
 		return false
 	}
 	return true
 }
 
 // OpenAIHealthHandler returns health check in OpenAI-compatible format
-func (ctrl *APIController) OpenAIHealthHandler(c *gin.Context) {
-	requestID := c.GetString("request_id")
+func (ctrl *APIController) OpenAIHealthHandler(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
 	if requestID == "" {
 		requestID = "unknown"
 	}
 	ctrl.logger.Debug("Health check requested", "request_id", requestID)
-	c.JSON(StatusOK, gin.H{
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(StatusOK)
+
+	response := map[string]interface{}{
 		"status": MsgHealthy,
-	})
+	}
+	json.NewEncoder(w).Encode(response)
 }
 
 // AuthenticateHandler checks authentication status and initiates device auth if needed
-func (ctrl *APIController) AuthenticateHandler(c *gin.Context) {
-	requestID := c.GetString("request_id")
+func (ctrl *APIController) AuthenticateHandler(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
 	if requestID == "" {
 		requestID = "unknown"
 	}
@@ -137,11 +147,14 @@ func (ctrl *APIController) AuthenticateHandler(c *gin.Context) {
 	if err == nil && credentials != nil {
 		// User is authenticated
 		ctrl.logger.Info("User is already authenticated", "request_id", requestID)
-		c.JSON(StatusOK, gin.H{
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(StatusOK)
+		response := map[string]interface{}{
 			"authenticated": true,
 			"message":       MsgUserAuthenticated,
 			"resource_url":  credentials.ResourceURL,
-		})
+		}
+		json.NewEncoder(w).Encode(response)
 		return
 	}
 
@@ -150,27 +163,33 @@ func (ctrl *APIController) AuthenticateHandler(c *gin.Context) {
 	err = ctrl.proxyUseCase.AuthenticateManually()
 	if err != nil {
 		ctrl.logger.Error("Authentication initiation failed", "request_id", requestID, "error", err)
-		c.JSON(StatusInternalServerError, gin.H{
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(StatusInternalServerError)
+		response := map[string]interface{}{
 			"authenticated": false,
-			"error": gin.H{
+			"error": map[string]interface{}{
 				"message": ErrMsgAuthFailed,
 				"type":    ErrorTypeAuthentication,
 				"details": err.Error(),
 			},
-		})
+		}
+		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	c.JSON(StatusOK, gin.H{
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(StatusOK)
+	response := map[string]interface{}{
 		"authenticated": false,
 		"message":       MsgAuthInitiated,
 		"status":        MsgAuthStatusInitiated,
-	})
+	}
+	json.NewEncoder(w).Encode(response)
 }
 
 // OpenAIModelsHandler returns models in OpenAI-compatible format
-func (ctrl *APIController) OpenAIModelsHandler(c *gin.Context) {
-	requestID := c.GetString("request_id")
+func (ctrl *APIController) OpenAIModelsHandler(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
 	if requestID == "" {
 		requestID = "unknown"
 	}
@@ -178,15 +197,15 @@ func (ctrl *APIController) OpenAIModelsHandler(c *gin.Context) {
 
 	models, err := ctrl.proxyUseCase.GetModels()
 	if err != nil {
-		ctrl.sendInternalError(c, err)
+		ctrl.sendInternalError(w, r, err)
 		return
 	}
 	ctrl.logger.Info("Retrieved models", "request_id", requestID, "count", len(models))
 
 	// Convert to OpenAI format
-	openAIModels := make([]gin.H, len(models))
+	openAIModels := make([]map[string]interface{}, len(models))
 	for i, model := range models {
-		openAIModels[i] = gin.H{
+		openAIModels[i] = map[string]interface{}{
 			"id":         model.ID,
 			"object":     model.Object,
 			"created":    model.Created,
@@ -195,24 +214,27 @@ func (ctrl *APIController) OpenAIModelsHandler(c *gin.Context) {
 		}
 	}
 
-	c.JSON(StatusOK, gin.H{
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(StatusOK)
+	response := map[string]interface{}{
 		"object": ObjectList,
 		"data":   openAIModels,
-	})
+	}
+	json.NewEncoder(w).Encode(response)
 }
 
 // OpenAICompletionsHandler handles OpenAI-style completions (non-chat)
-func (ctrl *APIController) OpenAICompletionsHandler(c *gin.Context) {
+func (ctrl *APIController) OpenAICompletionsHandler(w http.ResponseWriter, r *http.Request) {
 	ctrl.logger.Debug("OpenAI completions request received")
 
 	var body map[string]interface{}
-	if !ctrl.validateJSONRequest(c, &body) {
+	if !ctrl.validateJSONRequest(w, r, &body) {
 		return
 	}
 
 	prompt, ok := extractString(body["prompt"])
 	if !ok {
-		ctrl.sendValidationError(c, ErrMsgMissingPrompt)
+		ctrl.sendValidationError(w, r, ErrMsgMissingPrompt)
 		return
 	}
 
@@ -222,11 +244,11 @@ func (ctrl *APIController) OpenAICompletionsHandler(c *gin.Context) {
 	chatReq := ctrl.buildChatRequestFromCompletion(body, prompt, stream)
 
 	if stream {
-		ctrl.StreamChatCompletionsHandler(c, chatReq)
+		ctrl.StreamChatCompletionsHandler(w, r, chatReq)
 		return
 	}
 
-	ctrl.handleNonStreamingCompletion(c, chatReq)
+	ctrl.handleNonStreamingCompletion(w, r, chatReq)
 }
 
 // buildChatRequestFromCompletion converts completion request to chat completion format
@@ -258,31 +280,34 @@ func (ctrl *APIController) copyCompletionParameters(body map[string]interface{},
 }
 
 // handleNonStreamingCompletion handles non-streaming completion responses
-func (ctrl *APIController) handleNonStreamingCompletion(c *gin.Context, chatReq *entities.ChatCompletionRequest) {
+func (ctrl *APIController) handleNonStreamingCompletion(w http.ResponseWriter, r *http.Request, chatReq *entities.ChatCompletionRequest) {
 	response, err := ctrl.proxyUseCase.ChatCompletions(chatReq)
 	if err != nil {
-		ctrl.sendInternalError(c, err)
+		ctrl.sendInternalError(w, r, err)
 		return
 	}
 
 	if len(response.Choices) == 0 {
-		ctrl.sendErrorResponse(c, StatusInternalServerError, ErrorTypeInternal, ErrMsgUnexpectedFormat)
+		ctrl.sendErrorResponse(w, r, StatusInternalServerError, ErrorTypeInternal, ErrMsgUnexpectedFormat)
 		return
 	}
 
 	completionResponse := ctrl.buildCompletionResponse(response)
 	ctrl.logger.Info("Completion response sent", "id", response.ID, "usage", response.Usage)
-	c.JSON(StatusOK, completionResponse)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(StatusOK)
+	json.NewEncoder(w).Encode(completionResponse)
 }
 
 // buildCompletionResponse converts chat completion response to completion format
-func (ctrl *APIController) buildCompletionResponse(response *entities.ChatCompletionResponse) gin.H {
-	return gin.H{
+func (ctrl *APIController) buildCompletionResponse(response *entities.ChatCompletionResponse) map[string]interface{} {
+	return map[string]interface{}{
 		"id":      response.ID,
 		"object":  ObjectTextCompletion,
 		"created": response.Created,
 		"model":   response.Model,
-		"choices": []gin.H{
+		"choices": []map[string]interface{}{
 			{
 				"text":          extractTextContent(response.Choices[0].Message.Content),
 				"index":         0,
@@ -295,41 +320,44 @@ func (ctrl *APIController) buildCompletionResponse(response *entities.ChatComple
 }
 
 // ChatCompletionsHandler handles chat completion requests
-func (ctrl *APIController) ChatCompletionsHandler(c *gin.Context) {
+func (ctrl *APIController) ChatCompletionsHandler(w http.ResponseWriter, r *http.Request) {
 	ctrl.logger.Debug("Chat completions request received")
 
 	var req entities.ChatCompletionRequest
-	if !ctrl.validateJSONRequest(c, &req) {
+	if !ctrl.validateJSONRequest(w, r, &req) {
 		return
 	}
 
 	ctrl.logger.Info("Processing chat completion", "model", req.Model, "stream", req.Stream, "messages", len(req.Messages))
 
 	if req.Stream {
-		ctrl.StreamChatCompletionsHandler(c, &req)
+		ctrl.StreamChatCompletionsHandler(w, r, &req)
 		return
 	}
 
-	ctrl.handleNonStreamingChatCompletion(c, &req)
+	ctrl.handleNonStreamingChatCompletion(w, r, &req)
 }
 
 // handleNonStreamingChatCompletion handles non-streaming chat completion responses
-func (ctrl *APIController) handleNonStreamingChatCompletion(c *gin.Context, req *entities.ChatCompletionRequest) {
+func (ctrl *APIController) handleNonStreamingChatCompletion(w http.ResponseWriter, r *http.Request, req *entities.ChatCompletionRequest) {
 	response, err := ctrl.proxyUseCase.ChatCompletions(req)
 	if err != nil {
-		ctrl.sendInternalError(c, err)
+		ctrl.sendInternalError(w, r, err)
 		return
 	}
 
 	ctrl.logger.Info("Chat completion response sent", "id", response.ID, "usage", response.Usage)
-	c.JSON(StatusOK, response)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(StatusOK)
+	json.NewEncoder(w).Encode(response)
 }
 
 // StreamChatCompletionsHandler handles streaming chat completion requests
-func (ctrl *APIController) StreamChatCompletionsHandler(c *gin.Context, req *entities.ChatCompletionRequest) {
+func (ctrl *APIController) StreamChatCompletionsHandler(w http.ResponseWriter, r *http.Request, req *entities.ChatCompletionRequest) {
 	ctrl.logger.Debug("Streaming chat completion initiated", "model", req.Model)
 
-	err := ctrl.proxyUseCase.StreamChatCompletions(req, c.Writer)
+	err := ctrl.proxyUseCase.StreamChatCompletions(req, w)
 	if err != nil {
 		// For streaming, we can't send JSON error after headers are set
 		// The error would have been logged in the use case

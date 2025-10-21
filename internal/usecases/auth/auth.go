@@ -1,95 +1,32 @@
 package auth
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
 	"qwen-go-proxy/internal/domain/entities"
+	"qwen-go-proxy/internal/domain/interfaces"
 	"qwen-go-proxy/internal/infrastructure/logging"
-	"qwen-go-proxy/internal/interfaces/gateways"
 )
-
-// CredentialRepository defines the interface for credential storage
-type CredentialRepository interface {
-	Load() (*entities.Credentials, error)
-	Save(credentials *entities.Credentials) error
-}
-
-// FileCredentialRepository implements CredentialRepository using file storage
-type FileCredentialRepository struct {
-	filePath string
-}
-
-// NewFileCredentialRepository creates a new file-based credential repository
-func NewFileCredentialRepository(qwenDir string) CredentialRepository {
-	// Use current working directory as base path
-	workDir, err := os.Getwd()
-	if err != nil {
-		panic(fmt.Sprintf("Failed to get current working directory: %v", err))
-	}
-	return &FileCredentialRepository{
-		filePath: filepath.Join(workDir, qwenDir, "oauth_creds.json"),
-	}
-}
-
-// Load loads credentials from file
-func (r *FileCredentialRepository) Load() (*entities.Credentials, error) {
-	data, err := os.ReadFile(r.filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("failed to read Qwen OAuth credentials: %w", err)
-		}
-		if os.IsPermission(err) {
-			return nil, fmt.Errorf("failed to read Qwen OAuth credentials: permission denied. The credentials file exists but is not readable by the application user. Please ensure the file permissions allow read access")
-		}
-		return nil, fmt.Errorf("failed to read Qwen OAuth credentials: %w", err)
-	}
-
-	var creds entities.Credentials
-	if err := json.Unmarshal(data, &creds); err != nil {
-		return nil, fmt.Errorf("failed to parse Qwen OAuth credentials: %w", err)
-	}
-
-	return &creds, nil
-}
-
-// Save saves credentials to file
-func (r *FileCredentialRepository) Save(credentials *entities.Credentials) error {
-	// Ensure directory exists
-	dir := filepath.Dir(r.filePath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("failed to create directory %s: %w", dir, err)
-	}
-
-	data, err := json.MarshalIndent(credentials, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal credentials: %w", err)
-	}
-
-	return os.WriteFile(r.filePath, data, 0644)
-}
 
 // AuthUseCase defines the authentication use case
 type AuthUseCase struct {
 	config         *entities.Config
-	oauthGateway   gateways.OAuthGateway
-	credentialRepo CredentialRepository
+	oauthService   interfaces.OAuthService
+	credentialRepo interfaces.CredentialRepository
 	logger         *logging.Logger
 	tokenMutex     sync.RWMutex
 	refreshMutex   sync.Mutex
 }
 
 // NewAuthUseCase creates a new authentication use case
-func NewAuthUseCase(config *entities.Config, oauthGateway gateways.OAuthGateway, credentialRepo CredentialRepository, logger *logging.Logger) *AuthUseCase {
+func NewAuthUseCase(config *entities.Config, oauthService interfaces.OAuthService, credentialRepo interfaces.CredentialRepository, logger *logging.Logger) *AuthUseCase {
 	if config == nil {
 		panic("config cannot be nil")
 	}
-	if oauthGateway == nil {
-		panic("oauthGateway cannot be nil")
+	if oauthService == nil {
+		panic("oauthService cannot be nil")
 	}
 	if credentialRepo == nil {
 		panic("credentialRepo cannot be nil")
@@ -99,7 +36,7 @@ func NewAuthUseCase(config *entities.Config, oauthGateway gateways.OAuthGateway,
 	}
 	return &AuthUseCase{
 		config:         config,
-		oauthGateway:   oauthGateway,
+		oauthService:   oauthService,
 		credentialRepo: credentialRepo,
 		logger:         logger,
 	}
@@ -167,7 +104,7 @@ func (uc *AuthUseCase) refreshAccessToken(credentials *entities.Credentials) (*e
 		return nil, fmt.Errorf("no refresh token available in credentials")
 	}
 
-	newCredentials, err := uc.oauthGateway.RefreshToken(credentials.RefreshToken, uc.config.QWENOAuthClientID)
+	newCredentials, err := uc.oauthService.RefreshToken(credentials.RefreshToken, uc.config.QWENOAuthClientID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to refresh token: %w", err)
 	}
@@ -187,7 +124,7 @@ func (uc *AuthUseCase) refreshAccessToken(credentials *entities.Credentials) (*e
 
 // authenticateWithDeviceFlow performs OAuth2 device authorization flow
 func (uc *AuthUseCase) authenticateWithDeviceFlow() (*entities.Credentials, error) {
-	credentials, err := uc.oauthGateway.AuthenticateWithDeviceFlow(uc.config.QWENOAuthClientID, uc.config.QWENOAuthScope)
+	credentials, err := uc.oauthService.AuthenticateWithDeviceFlow(uc.config.QWENOAuthClientID, uc.config.QWENOAuthScope)
 	if err != nil {
 		return nil, fmt.Errorf("device authentication failed: %w", err)
 	}
