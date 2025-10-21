@@ -692,63 +692,6 @@ func TestAuthUseCase_authenticateWithDeviceFlow_Failure(t *testing.T) {
 	}
 }
 
-func TestAuthUseCase_GetBaseURL_WithResourceURL(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	config := &entities.Config{}
-	oauthGateway := mocks.NewMockOAuthGateway(ctrl)
-	logger := logging.NewLoggerFromConfig(&entities.Config{LogLevel: "error"})
-	repo := &mockCredentialRepository{}
-
-	useCase := NewAuthUseCase(config, oauthGateway, repo, logger)
-
-	credentials := &entities.Credentials{
-		AccessToken: "test-token",
-		TokenType:   "Bearer",
-		ResourceURL: "https://custom.api.com",
-	}
-
-	result, err := useCase.GetBaseURL(credentials)
-
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-	if result != "https://custom.api.com" {
-		t.Errorf("Expected base URL 'https://custom.api.com', got %s", result)
-	}
-}
-
-func TestAuthUseCase_GetBaseURL_NoResourceURL(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	config := &entities.Config{}
-	oauthGateway := mocks.NewMockOAuthGateway(ctrl)
-	logger := logging.NewLoggerFromConfig(&entities.Config{LogLevel: "error"})
-	repo := &mockCredentialRepository{}
-
-	useCase := NewAuthUseCase(config, oauthGateway, repo, logger)
-
-	credentials := &entities.Credentials{
-		AccessToken: "test-token",
-		TokenType:   "Bearer",
-		// No ResourceURL
-	}
-
-	result, err := useCase.GetBaseURL(credentials)
-
-	if err == nil {
-		t.Error("Expected error for missing resource URL")
-	}
-	if !strings.Contains(err.Error(), "no resource URL available") {
-		t.Errorf("Expected specific error message, got %v", err)
-	}
-	if result != "" {
-		t.Errorf("Expected empty result, got %s", result)
-	}
-}
-
 func TestAuthUseCase_AuthenticateManually_Success(t *testing.T) {
 	config := &entities.Config{
 		QWENOAuthClientID: "test-client-id",
@@ -1137,73 +1080,6 @@ func TestAuthUseCase_refreshAccessToken_RepositorySaveError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, refreshed)
 	assert.Contains(t, err.Error(), "failed to save refreshed credentials")
-}
-
-func TestAuthUseCase_GetBaseURL_NilCredentials(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	config := &entities.Config{}
-	oauthGateway := mocks.NewMockOAuthGateway(ctrl)
-	logger := logging.NewLoggerFromConfig(&entities.Config{LogLevel: "error"})
-	repo := &mockCredentialRepository{}
-
-	useCase := NewAuthUseCase(config, oauthGateway, repo, logger)
-
-	// Test with nil credentials
-	result, err := useCase.GetBaseURL(nil)
-
-	assert.Error(t, err)
-	assert.Equal(t, "", result)
-	assert.Contains(t, err.Error(), "credentials cannot be nil")
-}
-
-func TestAuthUseCase_GetBaseURL_CredentialsWithoutResourceURL(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	config := &entities.Config{}
-	oauthGateway := mocks.NewMockOAuthGateway(ctrl)
-	logger := logging.NewLoggerFromConfig(&entities.Config{LogLevel: "error"})
-	repo := &mockCredentialRepository{}
-
-	useCase := NewAuthUseCase(config, oauthGateway, repo, logger)
-
-	credentials := &entities.Credentials{
-		AccessToken: "test-token",
-		TokenType:   "Bearer",
-		// No ResourceURL
-	}
-
-	result, err := useCase.GetBaseURL(credentials)
-
-	assert.Error(t, err)
-	assert.Equal(t, "", result)
-	assert.Contains(t, err.Error(), "no resource URL available")
-}
-
-func TestAuthUseCase_GetBaseURL_CredentialsWithEmptyResourceURL(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	config := &entities.Config{}
-	oauthGateway := mocks.NewMockOAuthGateway(ctrl)
-	logger := logging.NewLoggerFromConfig(&entities.Config{LogLevel: "error"})
-	repo := &mockCredentialRepository{}
-
-	useCase := NewAuthUseCase(config, oauthGateway, repo, logger)
-
-	credentials := &entities.Credentials{
-		AccessToken: "test-token",
-		TokenType:   "Bearer",
-		ResourceURL: "", // Empty resource URL
-	}
-
-	result, err := useCase.GetBaseURL(credentials)
-
-	assert.Error(t, err)
-	assert.Equal(t, "", result)
-	assert.Contains(t, err.Error(), "no resource URL available")
 }
 
 func TestAuthUseCase_CheckAuthentication_RepositoryLoadError(t *testing.T) {

@@ -28,14 +28,6 @@ func (c *Credentials) IsExpired() bool {
 	return c.ExpiryDate <= buffer
 }
 
-// GetToken returns the formatted authorization token
-func (c *Credentials) GetToken() string {
-	if c == nil || c.AccessToken == "" {
-		return ""
-	}
-	return fmt.Sprintf("%s %s", c.TokenType, c.AccessToken)
-}
-
 // Sanitize returns a safe representation of credentials for logging (without sensitive data)
 func (c *Credentials) Sanitize() map[string]interface{} {
 	if c == nil {

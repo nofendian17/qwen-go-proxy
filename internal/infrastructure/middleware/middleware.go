@@ -19,6 +19,13 @@ import (
 	"qwen-go-proxy/internal/infrastructure/logging"
 )
 
+// Define a custom type for context keys to avoid collisions
+type contextKey string
+
+const (
+	RequestIDKey contextKey = "request_id"
+)
+
 // responseWriterWrapper wraps gin.ResponseWriter to capture response body and headers
 type responseWriterWrapper struct {
 	gin.ResponseWriter
@@ -146,7 +153,7 @@ func RequestID() gin.HandlerFunc {
 		c.Set("request_id", requestID)
 
 		// Add to request context for propagation
-		ctx := context.WithValue(c.Request.Context(), "request_id", requestID)
+		ctx := context.WithValue(c.Request.Context(), RequestIDKey, requestID)
 		c.Request = c.Request.WithContext(ctx)
 
 		c.Next()
@@ -167,6 +174,13 @@ func generateRequestID() string {
 func GetRequestID(c *gin.Context) string {
 	if requestID, exists := c.Get("request_id"); exists {
 		if id, ok := requestID.(string); ok {
+			return id
+		}
+	}
+
+	// Also check in request context using our custom type
+	if ctxRequestID := c.Request.Context().Value(RequestIDKey); ctxRequestID != nil {
+		if id, ok := ctxRequestID.(string); ok {
 			return id
 		}
 	}

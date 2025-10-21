@@ -127,29 +127,29 @@ All API responses include:
 
 All configuration is done via environment variables:
 
-| Variable                         | Default                                          | Description                                             |
-|----------------------------------|--------------------------------------------------|---------------------------------------------------------|
-| `SERVER_HOST`                    | `0.0.0.0`                                        | Server bind address                                     |
-| `SERVER_PORT`                    | `8080`                                           | Server port                                             |
-| `LOG_LEVEL`                      | `info`                                           | Logging level (debug, info, warn, error)                |
-| `LOG_FORMAT`                     | `json`                                           | Logging format (json, text)                             |
-| `DEBUG_MODE`                     | `false`                                          | Enable debug mode with enhanced logging                 |
-| `RATE_LIMIT_RPS`                 | `10`                                             | Requests per second limit                               |
-| `RATE_LIMIT_BURST`               | `20`                                             | Burst capacity for rate limiting                        |
-| `QWEN_DIR`                       | `.qwen`                                          | Directory for credential storage                        |
-| `READ_TIMEOUT`                   | `30s`                                            | HTTP read timeout                                       |
-| `WRITE_TIMEOUT`                  | `30s`                                            | HTTP write timeout                                      |
-| `SHUTDOWN_TIMEOUT`               | `30s`                                            | Graceful shutdown timeout                               |
-| `ENABLE_TLS`                     | `false`                                          | Enable TLS/HTTPS support                                |
-| `TLS_CERT_FILE`                  | ``                                               | Path to TLS certificate file                            |
-| `TLS_KEY_FILE`                   | ``                                               | Path to TLS private key file                            |
-| `TRUSTED_PROXIES`                | ``                                               | Comma-separated list of trusted proxy IPs               |
-| `TOKEN_REFRESH_BUFFER`           | `5m`                                             | Token refresh buffer time                               |
-| `QWEN_OAUTH_BASE_URL`            | `https://chat.qwen.ai`                           | Base URL for Qwen OAuth                                 |
-| `QWEN_OAUTH_CLIENT_ID`           | `f0304373b74a44d2b584a3fb70ca9e56`               | Qwen OAuth client ID                                    |
-| `QWEN_OAUTH_SCOPE`               | `openid profile email model.completion`          | Qwen OAuth scope                                        |
-| `QWEN_OAUTH_DEVICE_AUTH_URL`     | `https://chat.qwen.ai/api/v1/oauth2/device/code` | Device authorization URL                                |
-| `API_BASE_URL`                   | `https://portal.qwen.ai/v1`                      | Base URL for Qwen API                                   |
+| Variable                     | Default                                          | Description                               |
+|------------------------------|--------------------------------------------------|-------------------------------------------|
+| `SERVER_HOST`                | `0.0.0.0`                                        | Server bind address                       |
+| `SERVER_PORT`                | `8080`                                           | Server port                               |
+| `LOG_LEVEL`                  | `info`                                           | Logging level (debug, info, warn, error)  |
+| `LOG_FORMAT`                 | `json`                                           | Logging format (json, text)               |
+| `DEBUG_MODE`                 | `false`                                          | Enable debug mode with enhanced logging   |
+| `RATE_LIMIT_RPS`             | `10`                                             | Requests per second limit                 |
+| `RATE_LIMIT_BURST`           | `20`                                             | Burst capacity for rate limiting          |
+| `QWEN_DIR`                   | `.qwen`                                          | Directory for credential storage          |
+| `READ_TIMEOUT`               | `30s`                                            | HTTP read timeout                         |
+| `WRITE_TIMEOUT`              | `30s`                                            | HTTP write timeout                        |
+| `SHUTDOWN_TIMEOUT`           | `30s`                                            | Graceful shutdown timeout                 |
+| `ENABLE_TLS`                 | `false`                                          | Enable TLS/HTTPS support                  |
+| `TLS_CERT_FILE`              | ``                                               | Path to TLS certificate file              |
+| `TLS_KEY_FILE`               | ``                                               | Path to TLS private key file              |
+| `TRUSTED_PROXIES`            | ``                                               | Comma-separated list of trusted proxy IPs |
+| `TOKEN_REFRESH_BUFFER`       | `5m`                                             | Token refresh buffer time                 |
+| `QWEN_OAUTH_BASE_URL`        | `https://chat.qwen.ai`                           | Base URL for Qwen OAuth                   |
+| `QWEN_OAUTH_CLIENT_ID`       | `f0304373b74a44d2b584a3fb70ca9e56`               | Qwen OAuth client ID                      |
+| `QWEN_OAUTH_SCOPE`           | `openid profile email model.completion`          | Qwen OAuth scope                          |
+| `QWEN_OAUTH_DEVICE_AUTH_URL` | `https://chat.qwen.ai/api/v1/oauth2/device/code` | Device authorization URL                  |
+| `API_BASE_URL`               | `https://portal.qwen.ai/v1`                      | Base URL for Qwen API                     |
 
 **Note**: `TRUSTED_PROXIES` supports comma-separated values with automatic whitespace trimming (e.g.,
 `"127.0.0.1, 192.168.1.1, 10.0.0.1"`).

@@ -44,7 +44,7 @@ func (r *FileCredentialRepository) Load() (*entities.Credentials, error) {
 			return nil, fmt.Errorf("failed to read Qwen OAuth credentials: %w", err)
 		}
 		if os.IsPermission(err) {
-			return nil, fmt.Errorf("failed to read Qwen OAuth credentials: permission denied. The credentials file exists but is not readable by the application user. Please ensure the file permissions allow read access.")
+			return nil, fmt.Errorf("failed to read Qwen OAuth credentials: permission denied. The credentials file exists but is not readable by the application user. Please ensure the file permissions allow read access")
 		}
 		return nil, fmt.Errorf("failed to read Qwen OAuth credentials: %w", err)
 	}
@@ -202,19 +202,6 @@ func (uc *AuthUseCase) authenticateWithDeviceFlow() (*entities.Credentials, erro
 
 	uc.logger.Info("Device authentication successful, credentials saved")
 	return credentials, nil
-}
-
-// GetBaseURL returns the base URL for API calls
-func (uc *AuthUseCase) GetBaseURL(credentials *entities.Credentials) (string, error) {
-	if credentials == nil {
-		return "", fmt.Errorf("credentials cannot be nil")
-	}
-	baseURL := credentials.ResourceURL
-	if baseURL == "" {
-		return "", fmt.Errorf("no resource URL available in credentials")
-	}
-
-	return baseURL, nil
 }
 
 // AuthenticateManually triggers the OAuth2 device flow authentication manually

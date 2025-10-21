@@ -468,11 +468,3 @@ func TestCORS_EmptyOrigin(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
 }
-
-// Mock logger that implements the logging interface
-type mockPanickingLogger struct{}
-
-func (m *mockPanickingLogger) Debug(msg string, args ...any) { panic("debug panic") }
-func (m *mockPanickingLogger) Info(msg string, args ...any)  { panic("info panic") }
-func (m *mockPanickingLogger) Warn(msg string, args ...any)  { panic("warn panic") }
-func (m *mockPanickingLogger) Error(msg string, args ...any) { panic("error panic") }
