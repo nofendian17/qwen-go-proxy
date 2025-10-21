@@ -452,8 +452,10 @@ func (sp *StreamProcessor) ProcessLine(rawLine string) error {
 
 	// Parse the chunk
 	chunk := sp.parser.Parse(rawLine)
-	sp.logger.Debug("Parsed chunk: type=%s, valid=%t, hasContent=%t",
-		chunk.Type.String(), chunk.IsValid, chunk.HasContent)
+	sp.logger.Debug("Parsed chunk",
+		"chunk_type", chunk.Type.String(),
+		"valid", chunk.IsValid,
+		"has_content", chunk.HasContent)
 
 	// Handle based on current state
 	switch sp.state.Current {
