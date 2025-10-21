@@ -15,14 +15,6 @@ import (
 	"qwen-go-proxy/internal/mocks"
 )
 
-// testLogger is a simple logger implementation for testing that does nothing
-type testLogger struct{}
-
-func (t *testLogger) Debug(msg string, args ...any) {}
-func (t *testLogger) Info(msg string, args ...any)  {}
-func (t *testLogger) Warn(msg string, args ...any)  {}
-func (t *testLogger) Error(msg string, args ...any) {}
-
 func TestNewAPIController(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -31,8 +23,7 @@ func TestNewAPIController(t *testing.T) {
 
 	// Create mocks
 	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
-	logger := &testLogger{}
-
+	logger := mocks.NewMockLoggerInterface(ctrl)
 	// Create controller
 	controller := NewAPIController(proxyCtrl, logger)
 
@@ -50,7 +41,10 @@ func TestOpenAIHealthHandler(t *testing.T) {
 
 	// Create mocks
 	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
-	logger := &testLogger{}
+	logger := mocks.NewMockLoggerInterface(ctrl)
+
+	// Setup mock expectations
+	logger.EXPECT().Debug("Health check requested", "request_id", "unknown")
 
 	// Create controller
 	controller := NewAPIController(proxyCtrl, logger)
@@ -79,13 +73,15 @@ func TestAuthenticateHandler_UserAuthenticated(t *testing.T) {
 
 	// Create mocks
 	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
-	logger := &testLogger{}
+	logger := mocks.NewMockLoggerInterface(ctrl)
 
 	// Setup mock expectations
 	credentials := &entities.Credentials{
 		ResourceURL: "https://example.com/resource",
 	}
 	proxyCtrl.EXPECT().CheckAuthentication().Return(credentials, nil)
+	logger.EXPECT().Debug("Authentication check requested", "request_id", "unknown")
+	logger.EXPECT().Info("User is already authenticated", "request_id", "unknown")
 
 	// Create controller
 	controller := NewAPIController(proxyCtrl, logger)
@@ -117,11 +113,13 @@ func TestAuthenticateHandler_UserNotAuthenticated(t *testing.T) {
 
 	// Create mocks
 	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
-	logger := &testLogger{}
+	logger := mocks.NewMockLoggerInterface(ctrl)
 
 	// Setup mock expectations
 	proxyCtrl.EXPECT().CheckAuthentication().Return(nil, assert.AnError)
 	proxyCtrl.EXPECT().AuthenticateManually().Return(nil)
+	logger.EXPECT().Debug("Authentication check requested", "request_id", "unknown")
+	logger.EXPECT().Info("User not authenticated, initiating device authentication", "request_id", "unknown")
 
 	// Create controller
 	controller := NewAPIController(proxyCtrl, logger)
@@ -153,11 +151,14 @@ func TestAuthenticateHandler_AuthenticationFailed(t *testing.T) {
 
 	// Create mocks
 	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
-	logger := &testLogger{}
+	logger := mocks.NewMockLoggerInterface(ctrl)
 
 	// Setup mock expectations
 	proxyCtrl.EXPECT().CheckAuthentication().Return(nil, assert.AnError)
 	proxyCtrl.EXPECT().AuthenticateManually().Return(assert.AnError)
+	logger.EXPECT().Debug("Authentication check requested", "request_id", "unknown")
+	logger.EXPECT().Info("User not authenticated, initiating device authentication", "request_id", "unknown")
+	logger.EXPECT().Error("Authentication initiation failed", "request_id", "unknown", "error", assert.AnError)
 
 	// Create controller
 	controller := NewAPIController(proxyCtrl, logger)
@@ -189,7 +190,7 @@ func TestOpenAIModelsHandler(t *testing.T) {
 
 	// Create mocks
 	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
-	logger := &testLogger{}
+	logger := mocks.NewMockLoggerInterface(ctrl)
 
 	// Setup mock expectations
 	models := []*entities.ModelInfo{
@@ -217,6 +218,8 @@ func TestOpenAIModelsHandler(t *testing.T) {
 		},
 	}
 	proxyCtrl.EXPECT().GetModels().Return(models, nil)
+	logger.EXPECT().Debug("Models list requested", "request_id", "unknown")
+	logger.EXPECT().Info("Retrieved models", "request_id", "unknown", "count", 1)
 
 	// Create controller
 	controller := NewAPIController(proxyCtrl, logger)
@@ -249,7 +252,12 @@ func TestOpenAICompletionsHandler_InvalidJSON(t *testing.T) {
 
 	// Create mocks
 	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
-	logger := &testLogger{}
+	logger := mocks.NewMockLoggerInterface(ctrl)
+
+	// Setup mock expectations
+	logger.EXPECT().Debug("OpenAI completions request received")
+	logger.EXPECT().Error("JSON binding failed", "request_id", "unknown", "error", gomock.Any())
+	logger.EXPECT().Error("API error response", "request_id", "unknown", "status", 400, "type", "invalid_request_error", "message", "Invalid JSON")
 
 	// Create controller
 	controller := NewAPIController(proxyCtrl, logger)
@@ -281,7 +289,11 @@ func TestOpenAICompletionsHandler_MissingPrompt(t *testing.T) {
 
 	// Create mocks
 	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
-	logger := &testLogger{}
+	logger := mocks.NewMockLoggerInterface(ctrl)
+
+	// Setup mock expectations
+	logger.EXPECT().Debug("OpenAI completions request received")
+	logger.EXPECT().Error("API error response", "request_id", "unknown", "status", 400, "type", "invalid_request_error", "message", "Missing prompt field")
 
 	// Create controller
 	controller := NewAPIController(proxyCtrl, logger)
@@ -314,7 +326,7 @@ func TestOpenAICompletionsHandler_NonStreaming(t *testing.T) {
 
 	// Create mocks
 	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
-	logger := &testLogger{}
+	logger := mocks.NewMockLoggerInterface(ctrl)
 
 	// Setup mock expectations
 	response := &entities.ChatCompletionResponse{
@@ -339,6 +351,9 @@ func TestOpenAICompletionsHandler_NonStreaming(t *testing.T) {
 		},
 	}
 	proxyCtrl.EXPECT().ChatCompletions(gomock.Any()).Return(response, nil)
+	logger.EXPECT().Debug("OpenAI completions request received")
+	logger.EXPECT().Info("Processing completion request", "stream", false, "prompt_length", 11)
+	logger.EXPECT().Info("Completion response sent", "id", "test-id", "usage", response.Usage)
 
 	// Create controller
 	controller := NewAPIController(proxyCtrl, logger)
@@ -373,7 +388,12 @@ func TestChatCompletionsHandler_InvalidJSON(t *testing.T) {
 
 	// Create mocks
 	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
-	logger := &testLogger{}
+	logger := mocks.NewMockLoggerInterface(ctrl)
+
+	// Setup mock expectations
+	logger.EXPECT().Debug("Chat completions request received")
+	logger.EXPECT().Error("JSON binding failed", "request_id", "unknown", "error", gomock.Any())
+	logger.EXPECT().Error("API error response", "request_id", "unknown", "status", 400, "type", "invalid_request_error", "message", "Invalid JSON")
 
 	// Create controller
 	controller := NewAPIController(proxyCtrl, logger)
@@ -405,7 +425,7 @@ func TestChatCompletionsHandler_NonStreaming(t *testing.T) {
 
 	// Create mocks
 	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
-	logger := &testLogger{}
+	logger := mocks.NewMockLoggerInterface(ctrl)
 
 	// Setup mock expectations
 	response := &entities.ChatCompletionResponse{
@@ -430,6 +450,9 @@ func TestChatCompletionsHandler_NonStreaming(t *testing.T) {
 		},
 	}
 	proxyCtrl.EXPECT().ChatCompletions(gomock.Any()).Return(response, nil)
+	logger.EXPECT().Debug("Chat completions request received")
+	logger.EXPECT().Info("Processing chat completion", "model", "qwen3-coder-plus", "stream", false, "messages", 1)
+	logger.EXPECT().Info("Chat completion response sent", "id", "test-id", "usage", response.Usage)
 
 	// Create controller
 	controller := NewAPIController(proxyCtrl, logger)
@@ -468,10 +491,14 @@ func TestChatCompletionsHandler_InternalError(t *testing.T) {
 
 	// Create mocks
 	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
-	logger := &testLogger{}
+	logger := mocks.NewMockLoggerInterface(ctrl)
 
 	// Setup mock expectations
 	proxyCtrl.EXPECT().ChatCompletions(gomock.Any()).Return(nil, assert.AnError)
+	logger.EXPECT().Debug("Chat completions request received")
+	logger.EXPECT().Info("Processing chat completion", "model", "qwen3-coder-plus", "stream", false, "messages", 1)
+	logger.EXPECT().Error("Internal server error", "request_id", "unknown", "error", assert.AnError)
+	logger.EXPECT().Error("API error response", "request_id", "unknown", "status", 500, "type", "internal_error", "message", "An internal error occurred")
 
 	// Create controller
 	controller := NewAPIController(proxyCtrl, logger)
@@ -556,8 +583,11 @@ func TestExtractBool(t *testing.T) {
 
 func TestNewAPIController_NilProxyUseCase(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	// Create mocks
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	logger := &testLogger{}
+	logger := mocks.NewMockLoggerInterface(ctrl)
 
 	// Test with nil proxy use case - should panic (documenting current behavior)
 	assert.Panics(t, func() {
@@ -588,7 +618,7 @@ func TestOpenAIHealthHandler_ControllerNilProxy(t *testing.T) {
 	// Create controller with nil proxy use case (this would panic in NewAPIController)
 	// So we test the panic behavior in NewAPIController instead
 	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
-	logger := &testLogger{}
+	logger := mocks.NewMockLoggerInterface(ctrl)
 
 	controller := NewAPIController(proxyCtrl, logger)
 	assert.NotNil(t, controller)
@@ -601,12 +631,14 @@ func TestAuthenticateHandler_NilCredentials(t *testing.T) {
 	defer ctrl.Finish()
 
 	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
-	logger := &testLogger{}
+	logger := mocks.NewMockLoggerInterface(ctrl)
 
 	// Setup mock to return nil credentials and no error
 	proxyCtrl.EXPECT().CheckAuthentication().Return(nil, nil)
 	// Since credentials are nil, it will call AuthenticateManually
 	proxyCtrl.EXPECT().AuthenticateManually().Return(nil)
+	logger.EXPECT().Debug("Authentication check requested", "request_id", "unknown")
+	logger.EXPECT().Info("User not authenticated, initiating device authentication", "request_id", "unknown")
 
 	controller := NewAPIController(proxyCtrl, logger)
 
@@ -629,12 +661,14 @@ func TestAuthenticateHandler_CheckAuthError(t *testing.T) {
 	defer ctrl.Finish()
 
 	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
-	logger := &testLogger{}
+	logger := mocks.NewMockLoggerInterface(ctrl)
 
 	// Setup mock to return error
 	proxyCtrl.EXPECT().CheckAuthentication().Return(nil, errors.New("check auth failed"))
 	// Since CheckAuthentication failed, it will call AuthenticateManually
 	proxyCtrl.EXPECT().AuthenticateManually().Return(nil)
+	logger.EXPECT().Debug("Authentication check requested", "request_id", "unknown")
+	logger.EXPECT().Info("User not authenticated, initiating device authentication", "request_id", "unknown")
 
 	controller := NewAPIController(proxyCtrl, logger)
 
@@ -657,10 +691,13 @@ func TestOpenAIModelsHandler_GetModelsError(t *testing.T) {
 	defer ctrl.Finish()
 
 	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
-	logger := &testLogger{}
+	logger := mocks.NewMockLoggerInterface(ctrl)
 
 	// Setup mock to return error
 	proxyCtrl.EXPECT().GetModels().Return(nil, errors.New("get models failed"))
+	logger.EXPECT().Debug("Models list requested", "request_id", "unknown")
+	logger.EXPECT().Error("Internal server error", "request_id", "unknown", "error", errors.New("get models failed"))
+	logger.EXPECT().Error("API error response", "request_id", "unknown", "status", 500, "type", "internal_error", "message", "An internal error occurred")
 
 	controller := NewAPIController(proxyCtrl, logger)
 
@@ -683,7 +720,11 @@ func TestOpenAICompletionsHandler_EmptyRequestBody(t *testing.T) {
 	defer ctrl.Finish()
 
 	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
-	logger := &testLogger{}
+	logger := mocks.NewMockLoggerInterface(ctrl)
+
+	logger.EXPECT().Debug("OpenAI completions request received")
+	logger.EXPECT().Error("JSON binding failed", "request_id", "unknown", "error", gomock.Any())
+	logger.EXPECT().Error("API error response", "request_id", "unknown", "status", 400, "type", "invalid_request_error", "message", "Invalid JSON")
 
 	controller := NewAPIController(proxyCtrl, logger)
 
@@ -708,7 +749,11 @@ func TestOpenAICompletionsHandler_MalformedJSON(t *testing.T) {
 	defer ctrl.Finish()
 
 	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
-	logger := &testLogger{}
+	logger := mocks.NewMockLoggerInterface(ctrl)
+
+	logger.EXPECT().Debug("OpenAI completions request received")
+	logger.EXPECT().Error("JSON binding failed", "request_id", "unknown", "error", gomock.Any())
+	logger.EXPECT().Error("API error response", "request_id", "unknown", "status", 400, "type", "invalid_request_error", "message", "Invalid JSON")
 
 	controller := NewAPIController(proxyCtrl, logger)
 
@@ -733,7 +778,11 @@ func TestChatCompletionsHandler_EmptyRequestBody(t *testing.T) {
 	defer ctrl.Finish()
 
 	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
-	logger := &testLogger{}
+	logger := mocks.NewMockLoggerInterface(ctrl)
+
+	logger.EXPECT().Debug("Chat completions request received")
+	logger.EXPECT().Error("JSON binding failed", "request_id", "unknown", "error", gomock.Any())
+	logger.EXPECT().Error("API error response", "request_id", "unknown", "status", 400, "type", "invalid_request_error", "message", "Invalid JSON")
 
 	controller := NewAPIController(proxyCtrl, logger)
 
@@ -758,7 +807,11 @@ func TestChatCompletionsHandler_MalformedJSON(t *testing.T) {
 	defer ctrl.Finish()
 
 	proxyCtrl := mocks.NewMockProxyUseCaseInterface(ctrl)
-	logger := &testLogger{}
+	logger := mocks.NewMockLoggerInterface(ctrl)
+
+	logger.EXPECT().Debug("Chat completions request received")
+	logger.EXPECT().Error("JSON binding failed", "request_id", "unknown", "error", gomock.Any())
+	logger.EXPECT().Error("API error response", "request_id", "unknown", "status", 400, "type", "invalid_request_error", "message", "Invalid JSON")
 
 	controller := NewAPIController(proxyCtrl, logger)
 
