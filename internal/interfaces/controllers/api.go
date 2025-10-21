@@ -13,35 +13,35 @@ import (
 
 // Constants for API responses and error handling
 const (
-	// Default model for completions
+	// DefaultModel Default model for completions
 	DefaultModel = "qwen3-coder-plus"
 
-	// OpenAI-compatible object types
+	// ObjectList OpenAI-compatible object types
 	ObjectList           = "list"
 	ObjectTextCompletion = "text_completion"
 
-	// Error types
+	// ErrorTypeInvalidRequest Error types
 	ErrorTypeInvalidRequest = "invalid_request_error"
 	ErrorTypeInternal       = "internal_error"
 	ErrorTypeAuthentication = "authentication_error"
 
-	// Error messages
+	// ErrMsgInvalidJSON Error messages
 	ErrMsgInvalidJSON      = "Invalid JSON"
 	ErrMsgMissingPrompt    = "Missing prompt field"
 	ErrMsgUnexpectedFormat = "Unexpected response format"
 	ErrMsgAuthFailed       = "Authentication failed"
 	ErrMsgInternalError    = "An internal error occurred"
 
-	// Response messages
+	// MsgUserAuthenticated Response messages
 	MsgUserAuthenticated   = "User is authenticated"
 	MsgAuthInitiated       = "Device authentication initiated. Please complete the authentication process in your browser."
 	MsgHealthy             = "healthy"
 	MsgAuthStatusInitiated = "authentication_initiated"
 
-	// Content types
+	// ContentTypeText Content types
 	ContentTypeText = "text"
 
-	// HTTP status codes for common responses
+	// StatusOK HTTP status codes for common responses
 	StatusOK                  = http.StatusOK
 	StatusBadRequest          = http.StatusBadRequest
 	StatusInternalServerError = http.StatusInternalServerError

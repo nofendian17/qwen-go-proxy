@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Security note: This struct contains sensitive authentication data.
+// Credentials Security note: This struct contains sensitive authentication data.
 // Access tokens should be handled securely and never logged in plain text.
 type Credentials struct {
 	AccessToken  string `json:"access_token"`  // Sensitive: never log this value

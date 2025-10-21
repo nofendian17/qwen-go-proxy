@@ -93,7 +93,7 @@ func NewStreamState() *StreamState {
 }
 
 // TransitionTo changes the state and logs the transition
-func (s *StreamState) TransitionTo(newState StreamingState, reason string) {
+func (s *StreamState) TransitionTo(newState StreamingState) {
 	s.Current = newState
 	// Note: logging removed as it should be handled by the processor
 }
@@ -444,7 +444,7 @@ func NewStreamProcessor(writer *responseWriterWrapper, ctx context.Context, logg
 func (sp *StreamProcessor) ProcessLine(rawLine string) error {
 	select {
 	case <-sp.ctx.Done():
-		sp.state.TransitionTo(StateTerminating, "client disconnected")
+		sp.state.TransitionTo(StateTerminating)
 		sp.logger.Debug("Client disconnected during streaming, stopping response")
 		return sp.ctx.Err()
 	default:
@@ -482,17 +482,17 @@ func (sp *StreamProcessor) handleInitialChunk(chunk *ParsedChunk) error {
 		if chunk.HasContent {
 			// First content chunk - enter stuttering mode
 			sp.state.Buffer = chunk.Content
-			sp.state.TransitionTo(StateStuttering, "first content chunk")
+			sp.state.TransitionTo(StateStuttering)
 			sp.logger.Debug("Entering stuttering mode with first chunk", "content_text", chunk.ContentText)
 		} else {
 			// Non-content data chunk - forward directly
 			sp.forwardChunk(chunk)
-			sp.state.TransitionTo(StateNormalFlow, "non-content data chunk")
+			sp.state.TransitionTo(StateNormalFlow)
 		}
 	case ChunkTypeDone:
 		// Immediate DONE - forward and terminate
 		sp.forwardChunk(chunk)
-		sp.state.TransitionTo(StateTerminating, "received DONE")
+		sp.state.TransitionTo(StateTerminating)
 	case ChunkTypeMalformed, ChunkTypeUnknown:
 		// Handle error
 		return sp.handleChunkError(chunk)
@@ -523,14 +523,14 @@ func (sp *StreamProcessor) handleStutteringChunk(chunk *ParsedChunk) error {
 			// Stuttering resolved - flush buffer and current chunk
 			sp.flushBufferedContent()
 			sp.forwardChunk(chunk)
-			sp.state.TransitionTo(StateNormalFlow, "stuttering resolved")
+			sp.state.TransitionTo(StateNormalFlow)
 			sp.logger.Debug("Stuttering resolved, flushed buffer and current chunk")
 		}
 	case ChunkTypeDone:
 		// DONE during stuttering - flush buffer and terminate
 		sp.flushBufferedContent()
 		sp.forwardChunk(chunk)
-		sp.state.TransitionTo(StateTerminating, "received DONE during stuttering")
+		sp.state.TransitionTo(StateTerminating)
 	case ChunkTypeMalformed, ChunkTypeUnknown:
 		return sp.handleChunkError(chunk)
 	}
@@ -548,7 +548,7 @@ func (sp *StreamProcessor) handleNormalChunk(chunk *ParsedChunk) error {
 		sp.forwardChunk(chunk)
 	case ChunkTypeDone:
 		sp.forwardChunk(chunk)
-		sp.state.TransitionTo(StateTerminating, "received DONE")
+		sp.state.TransitionTo(StateTerminating)
 	case ChunkTypeMalformed:
 		return sp.handleChunkError(chunk)
 	}
@@ -561,7 +561,7 @@ func (sp *StreamProcessor) handleNormalChunk(chunk *ParsedChunk) error {
 func (sp *StreamProcessor) handleRecoveryChunk(chunk *ParsedChunk) error {
 	// During recovery, try to get back to normal flow
 	if chunk.IsValid {
-		sp.state.TransitionTo(StateNormalFlow, "recovered from error")
+		sp.state.TransitionTo(StateNormalFlow)
 		return sp.handleNormalChunk(chunk)
 	}
 
@@ -593,10 +593,10 @@ func (sp *StreamProcessor) handleChunkError(chunk *ParsedChunk) error {
 	case ActionSkip:
 		return nil
 	case ActionRetry:
-		sp.state.TransitionTo(StateRecovering, "retrying after error")
+		sp.state.TransitionTo(StateRecovering)
 		return nil
 	case ActionTerminate:
-		sp.state.TransitionTo(StateTerminating, "terminating due to error")
+		sp.state.TransitionTo(StateTerminating)
 		return upstreamErr
 	default:
 		return upstreamErr

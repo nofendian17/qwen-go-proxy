@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os/signal"
@@ -171,7 +172,7 @@ func main() {
 		} else {
 			err = srv.ListenAndServe()
 		}
-		if err != nil && err != http.ErrServerClosed {
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("HTTP server failed", "error", err)
 			// Don't use log.Fatalf here as it would prevent graceful shutdown
 			stop()

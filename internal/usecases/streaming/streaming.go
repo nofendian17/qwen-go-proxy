@@ -3,6 +3,7 @@ package streaming
 import (
 	"bufio"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"qwen-go-proxy/internal/infrastructure/logging"
@@ -67,7 +68,7 @@ func (uc *StreamingUseCase) ProcessStreamingResponse(
 		}
 
 		if err := processor.ProcessLine(line); err != nil {
-			if err == context.Canceled {
+			if errors.Is(err, context.Canceled) {
 				uc.logger.Debug("Client disconnected, stopping stream processing")
 				return nil
 			}
