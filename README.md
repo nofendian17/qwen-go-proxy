@@ -8,9 +8,9 @@ authentication and AI capabilities.
 
 - 🏗️ **OpenAI-Compatible Endpoints**: `/v1/chat/completions`, `/v1/completions`, `/v1/models`
 - 🔐 **OAuth2 Authentication**: Automatic device flow authentication with Qwen
-- ⚡ **High Performance**: Built with Gin framework for low latency
+- ⚡ **High Performance**: Built with Chi router for low latency
 - 🛡️ **Security Features**: Advanced rate limiting with concurrent safety, TLS support, CORS, security headers
-- 📊 **Monitoring**: Health checks, detailed system metrics, structured logging with request tracing
+- 📊 **Enhanced Monitoring**: Health checks, detailed system metrics, structured logging with request tracing
 - 🔍 **Request Tracing**: Unique request ID tracking for debugging and log correlation
 - 🚨 **Structured Error Handling**: Categorized error types with detailed context and logging
 - 🐳 **Docker Support**: Containerized deployment with Docker Compose
@@ -156,7 +156,7 @@ All configuration is done via environment variables:
 
 ### Error Handling & Logging
 
-The proxy includes comprehensive error handling and structured logging for production monitoring:
+The proxy includes comprehensive error handling and enhanced structured logging with improved request tracing for production monitoring:
 
 #### Error Types
 
