@@ -66,44 +66,30 @@ metadata:
 
 
 # ============================================
-# 🔥 MULTI-ARCH DOCKER BUILDS
+# 🔥 MULTI-ARCH DOCKER BUILD (BUILDX)
+# ============================================
+# Build a single multi-arch image using docker buildx which will contain both amd64 and arm64
+# architectures in the same image manifest. This avoids creating separate tags for each
+# architecture and ensures docker manifests consistently include both platforms.
+# Uses Buildx --platform to build and push multi-platform images.
 # ============================================
 dockers:
-  - id: proxy-amd64
+  - id: proxy
     use: build
     builds:
       - qwen-go-proxy
     image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:latest"
     dockerfile: Dockerfile
     build_flag_templates:
-      - "--platform=linux/amd64"
+      - "--platform=linux/amd64,linux/arm64"
     goos: linux
-    goarch: amd64
+    # Ensure goreleaser actually pushes the built images to the registry
+    push: true
+    # Optional: show full build logs in CI
+    extra_build_flags:
+      - --progress=plain
 
-  - id: proxy-arm64
-    use: build
-    builds:
-      - qwen-go-proxy
-    image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-arm64"
-    dockerfile: Dockerfile
-    build_flag_templates:
-      - "--platform=linux/arm64"
-    goos: linux
-    goarch: arm64
-
-
-# ============================================
-# 🔥 MULTI-ARCH MANIFEST
-# ============================================
-docker_manifests:
-  - name: "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}"
-    image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-arm64"
-
-  - name: "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:latest"
-    image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-arm64"
+# The old docker_manifests block is no longer required when buildx pushes
+# multi-arch images directly, so it has been removed to avoid confusion.
