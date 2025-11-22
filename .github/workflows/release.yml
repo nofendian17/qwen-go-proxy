@@ -81,3 +81,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
           GITHUB_REPOSITORY_NAME: ${{ github.event.repository.name }}
+
+      - name: Build and Push Multi-platform Docker Image
+        if: success()
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          IMAGE_NAME="ghcr.io/${{ github.repository_owner }}/qwen-go-proxy"
+
+          # Build and push multi-platform image
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --tag "${IMAGE_NAME}:v${VERSION}" \
+            --tag "${IMAGE_NAME}:latest" \
+            --push \
+            .

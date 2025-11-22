@@ -51,25 +51,6 @@ release:
     owner: "{{ .Env.GITHUB_REPOSITORY_OWNER }}"
     name: "{{ .Env.GITHUB_REPOSITORY_NAME }}"
 
-# Docker image customization
-dockers:
-  - image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .Env.GITHUB_REPOSITORY_NAME }}:{{ .Tag }}"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .Env.GITHUB_REPOSITORY_NAME }}:latest"
-    dockerfile: Dockerfile
-    use_buildx: true
-    build_flag_templates:
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-      - "--platform=linux/amd64,linux/arm64"
-    extra_files:
-      - go.mod
-      - go.sum
-      - cmd
-      - internal
-
 # GitHub Actions integration
 before:
   hooks:
