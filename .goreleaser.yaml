@@ -55,8 +55,8 @@ changelog:
 release:
   name_template: "{{.Tag}}"
   github:
-    owner: "{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}"
-    name: "{{ .Env.GITHUB_REPOSITORY_NAME | or \"qwen-go\" }}"
+    owner: nofendian17
+    name: qwen-go-proxy
 
 snapshot:
   name_template: "{{ .Tag }}-SNAPSHOT-{{ .ShortCommit }}"
@@ -70,12 +70,14 @@ metadata:
 dockers:
   # AMD64 Linux build
   - id: proxy-amd64
+    ids:
+      - qwen-go-proxy
     goos: linux
     goarch: amd64
     image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:v{{ .Major }}-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:v{{ .Major }}.{{ .Minor }}-amd64"
+      - "ghcr.io/nofendian17/{{ .ProjectName }}:{{ .Version }}-amd64"
+      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Major }}-amd64"
+      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Major }}.{{ .Minor }}-amd64"
     dockerfile: Dockerfile
     use: buildx
     build_flag_templates:
@@ -91,12 +93,14 @@ dockers:
 
   # ARM64 Linux build
   - id: proxy-arm64
+    ids:
+      - qwen-go-proxy
     goos: linux
     goarch: arm64
     image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-arm64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:v{{ .Major }}-arm64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:v{{ .Major }}.{{ .Minor }}-arm64"
+      - "ghcr.io/nofendian17/{{ .ProjectName }}:{{ .Version }}-arm64"
+      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Major }}-arm64"
+      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Major }}.{{ .Minor }}-arm64"
     dockerfile: Dockerfile
     use: buildx
     build_flag_templates:
@@ -112,13 +116,15 @@ dockers:
 
   # ARM v7 Linux build (for Raspberry Pi and other ARM devices)
   - id: proxy-armv7
+    ids:
+      - qwen-go-proxy
     goos: linux
     goarch: arm
     goarm: 7
     image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-armv7"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:v{{ .Major }}-armv7"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:v{{ .Major }}.{{ .Minor }}-armv7"
+      - "ghcr.io/nofendian17/{{ .ProjectName }}:{{ .Version }}-armv7"
+      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Major }}-armv7"
+      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Major }}.{{ .Minor }}-armv7"
     dockerfile: Dockerfile
     use: buildx
     build_flag_templates:
@@ -137,30 +143,30 @@ dockers:
 # ============================================
 docker_manifests:
   # Versioned manifest
-  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}"
+  - name_template: "ghcr.io/nofendian17/{{ .ProjectName }}:{{ .Version }}"
     image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-arm64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-armv7"
+      - "ghcr.io/nofendian17/{{ .ProjectName }}:{{ .Version }}-amd64"
+      - "ghcr.io/nofendian17/{{ .ProjectName }}:{{ .Version }}-arm64"
+      - "ghcr.io/nofendian17/{{ .ProjectName }}:{{ .Version }}-armv7"
 
   # Major version manifest
-  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:v{{ .Major }}"
+  - name_template: "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Major }}"
     image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-arm64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-armv7"
+      - "ghcr.io/nofendian17/{{ .ProjectName }}:{{ .Version }}-amd64"
+      - "ghcr.io/nofendian17/{{ .ProjectName }}:{{ .Version }}-arm64"
+      - "ghcr.io/nofendian17/{{ .ProjectName }}:{{ .Version }}-armv7"
 
   # Minor version manifest
-  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:v{{ .Major }}.{{ .Minor }}"
+  - name_template: "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Major }}.{{ .Minor }}"
     image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-arm64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-armv7"
+      - "ghcr.io/nofendian17/{{ .ProjectName }}:{{ .Version }}-amd64"
+      - "ghcr.io/nofendian17/{{ .ProjectName }}:{{ .Version }}-arm64"
+      - "ghcr.io/nofendian17/{{ .ProjectName }}:{{ .Version }}-armv7"
 
   # Latest manifest
-  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:latest"
+  - name_template: "ghcr.io/nofendian17/{{ .ProjectName }}:latest"
     image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-arm64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-armv7"
+      - "ghcr.io/nofendian17/{{ .ProjectName }}:{{ .Version }}-amd64"
+      - "ghcr.io/nofendian17/{{ .ProjectName }}:{{ .Version }}-arm64"
+      - "ghcr.io/nofendian17/{{ .ProjectName }}:{{ .Version }}-armv7"
 
