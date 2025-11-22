@@ -48,7 +48,7 @@ func main() {
 	// Initialize use cases (application interfaces)
 	authUseCase := auth.NewAuthUseCase(cfg, oauthService, credentialRepo, logger)
 	streamingUseCase := streaming.NewStreamingUseCase(logger)
-	proxyUseCase := proxy.NewProxyUseCase(authUseCase, aiService, streamingUseCase, logger)
+	proxyUseCase := proxy.NewProxyUseCase(authUseCase, aiService, streamingUseCase, logger, cfg.DefaultModel)
 
 	// Initialize controllers
 	apiController := controllers.NewAPIController(proxyUseCase, logger)

@@ -237,7 +237,7 @@ func TestBuildChatRequestFromCompletion(t *testing.T) {
 	chatReq := controller.buildChatRequestFromCompletion(body, prompt, stream)
 
 	// Check that the request was built correctly
-	assert.Equal(t, DefaultModel, chatReq.Model)
+	assert.Equal(t, "", chatReq.Model) // Model should be empty to allow default
 	assert.Len(t, chatReq.Messages, 1)
 	assert.Equal(t, "user", chatReq.Messages[0].Role)
 	assert.Equal(t, prompt, chatReq.Messages[0].Content)

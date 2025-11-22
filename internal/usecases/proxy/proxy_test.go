@@ -25,7 +25,7 @@ func TestNewProxyUseCase(t *testing.T) {
 	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
 	mockLogger := mocks.NewMockLoggerInterface(ctrl)
 
-	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger, "qwen3-coder-plus")
 
 	assert.NotNil(t, useCase)
 	assert.Equal(t, mockAuthUseCase, useCase.authUseCase)
@@ -44,7 +44,7 @@ func TestProxyUseCase_ChatCompletions_Success(t *testing.T) {
 	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
 	mockLogger := mocks.NewMockLoggerInterface(ctrl)
 
-	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger, "qwen3-coder-plus")
 
 	req := &entities.ChatCompletionRequest{
 		Model: "test-model",
@@ -99,7 +99,7 @@ func TestProxyUseCase_ChatCompletions_AuthenticationFailure(t *testing.T) {
 	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
 	mockLogger := mocks.NewMockLoggerInterface(ctrl)
 
-	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger, "qwen3-coder-plus")
 
 	req := &entities.ChatCompletionRequest{
 		Messages: []entities.ChatMessage{
@@ -129,7 +129,7 @@ func TestProxyUseCase_ChatCompletions_DefaultModel(t *testing.T) {
 	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
 	mockLogger := mocks.NewMockLoggerInterface(ctrl)
 
-	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger, "qwen3-coder-plus")
 
 	req := &entities.ChatCompletionRequest{
 		// Model is empty, should use default
@@ -186,7 +186,7 @@ func TestProxyUseCase_StreamChatCompletions_Success(t *testing.T) {
 	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
 	mockLogger := mocks.NewMockLoggerInterface(ctrl)
 
-	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger, "qwen3-coder-plus")
 
 	req := &entities.ChatCompletionRequest{
 		Model: "test-model",
@@ -223,7 +223,7 @@ func TestProxyUseCase_StreamChatCompletions_AuthFailure(t *testing.T) {
 	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
 	mockLogger := mocks.NewMockLoggerInterface(ctrl)
 
-	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger, "qwen3-coder-plus")
 
 	req := &entities.ChatCompletionRequest{
 		Stream: true,
@@ -251,7 +251,7 @@ func TestProxyUseCase_GetModels(t *testing.T) {
 	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
 	mockLogger := mocks.NewMockLoggerInterface(ctrl)
 
-	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger, "qwen3-coder-plus")
 
 	// This method doesn't exist in the current implementation
 	// We would need to add it or test through other means
@@ -271,7 +271,7 @@ func TestNewProxyUseCase_NilAuthUseCase(t *testing.T) {
 
 	// Test with nil auth use case - should panic (documenting current behavior)
 	assert.Panics(t, func() {
-		NewProxyUseCase(nil, mockQwenGateway, mockStreamingUseCase, mockLogger)
+		NewProxyUseCase(nil, mockQwenGateway, mockStreamingUseCase, mockLogger, "qwen3-coder-plus")
 	})
 }
 
@@ -285,7 +285,7 @@ func TestNewProxyUseCase_NilQwenGateway(t *testing.T) {
 
 	// Test with nil qwen gateway - should panic (documenting current behavior)
 	assert.Panics(t, func() {
-		NewProxyUseCase(mockAuthUseCase, nil, mockStreamingUseCase, mockLogger)
+		NewProxyUseCase(mockAuthUseCase, nil, mockStreamingUseCase, mockLogger, "qwen3-coder-plus")
 	})
 }
 
@@ -299,7 +299,7 @@ func TestNewProxyUseCase_NilStreamingUseCase(t *testing.T) {
 
 	// Test with nil streaming use case - should panic (documenting current behavior)
 	assert.Panics(t, func() {
-		NewProxyUseCase(mockAuthUseCase, mockQwenGateway, nil, mockLogger)
+		NewProxyUseCase(mockAuthUseCase, mockQwenGateway, nil, mockLogger, "qwen3-coder-plus")
 	})
 }
 
@@ -313,7 +313,7 @@ func TestNewProxyUseCase_NilLogger(t *testing.T) {
 
 	// Test with nil logger - should panic (documenting current behavior)
 	assert.Panics(t, func() {
-		NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, nil)
+		NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, nil, "qwen3-coder-plus")
 	})
 }
 
@@ -326,7 +326,7 @@ func TestProxyUseCase_ChatCompletions_NilRequest(t *testing.T) {
 	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
 	mockLogger := mocks.NewMockLoggerInterface(ctrl)
 
-	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger, "qwen3-coder-plus")
 
 	// Test with nil request - should return error
 	response, err := useCase.ChatCompletions(nil)
@@ -344,7 +344,7 @@ func TestProxyUseCase_ChatCompletions_AuthUseCasePanic(t *testing.T) {
 	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
 	mockLogger := mocks.NewMockLoggerInterface(ctrl)
 
-	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger, "qwen3-coder-plus")
 
 	req := &entities.ChatCompletionRequest{
 		Messages: []entities.ChatMessage{
@@ -372,7 +372,7 @@ func TestProxyUseCase_ChatCompletions_QwenGatewayPanic(t *testing.T) {
 	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
 	mockLogger := mocks.NewMockLoggerInterface(ctrl)
 
-	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger, "qwen3-coder-plus")
 
 	req := &entities.ChatCompletionRequest{
 		Messages: []entities.ChatMessage{
@@ -405,7 +405,7 @@ func TestProxyUseCase_ChatCompletions_DefaultModelWithInvalidRequest(t *testing.
 	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
 	mockLogger := mocks.NewMockLoggerInterface(ctrl)
 
-	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger, "qwen3-coder-plus")
 
 	// Request with empty model (should use default)
 	req := &entities.ChatCompletionRequest{
@@ -438,7 +438,7 @@ func TestProxyUseCase_StreamChatCompletions_NilRequest(t *testing.T) {
 	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
 	mockLogger := mocks.NewMockLoggerInterface(ctrl)
 
-	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger, "qwen3-coder-plus")
 
 	writer := httptest.NewRecorder()
 
@@ -457,7 +457,7 @@ func TestProxyUseCase_StreamChatCompletions_NilWriter(t *testing.T) {
 	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
 	mockLogger := mocks.NewMockLoggerInterface(ctrl)
 
-	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger, "qwen3-coder-plus")
 
 	req := &entities.ChatCompletionRequest{
 		Stream: true,
@@ -478,7 +478,7 @@ func TestProxyUseCase_StreamChatCompletions_StreamingUseCasePanic(t *testing.T) 
 	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
 	mockLogger := mocks.NewMockLoggerInterface(ctrl)
 
-	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger, "qwen3-coder-plus")
 
 	req := &entities.ChatCompletionRequest{
 		Stream: true,
@@ -518,7 +518,7 @@ func TestProxyUseCase_CheckAuthentication_AuthUseCasePanic(t *testing.T) {
 	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
 	mockLogger := mocks.NewMockLoggerInterface(ctrl)
 
-	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger, "qwen3-coder-plus")
 
 	// Mock auth use case to panic
 	mockAuthUseCase.EXPECT().EnsureAuthenticated().DoAndReturn(func() (*entities.Credentials, error) {
@@ -540,7 +540,7 @@ func TestProxyUseCase_CheckAuthentication(t *testing.T) {
 	mockStreamingUseCase := mocks.NewMockStreamingUseCaseInterface(ctrl)
 	mockLogger := mocks.NewMockLoggerInterface(ctrl)
 
-	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger)
+	useCase := NewProxyUseCase(mockAuthUseCase, mockQwenGateway, mockStreamingUseCase, mockLogger, "qwen3-coder-plus")
 
 	credentials := &entities.Credentials{
 		ResourceURL: "https://api.example.com",

@@ -33,7 +33,7 @@ type ProxyUseCase struct {
 }
 
 // NewProxyUseCase creates a new proxy use case
-func NewProxyUseCase(authUseCase auth.AuthUseCaseInterface, qwenGateway gateways.QwenAPIGateway, streamingUseCase streaming.StreamingUseCaseInterface, logger logging.LoggerInterface) *ProxyUseCase {
+func NewProxyUseCase(authUseCase auth.AuthUseCaseInterface, qwenGateway gateways.QwenAPIGateway, streamingUseCase streaming.StreamingUseCaseInterface, logger logging.LoggerInterface, defaultModel string) *ProxyUseCase {
 	if authUseCase == nil {
 		panic("authUseCase cannot be nil")
 	}
@@ -46,12 +46,15 @@ func NewProxyUseCase(authUseCase auth.AuthUseCaseInterface, qwenGateway gateways
 	if logger == nil {
 		panic("logger cannot be nil")
 	}
+	if defaultModel == "" {
+		defaultModel = "qwen3-coder-plus"
+	}
 	return &ProxyUseCase{
 		authUseCase:      authUseCase,
 		qwenGateway:      qwenGateway,
 		streamingUseCase: streamingUseCase,
 		logger:           logger,
-		defaultModel:     "qwen3-coder-plus",
+		defaultModel:     defaultModel,
 	}
 }
 

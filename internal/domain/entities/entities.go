@@ -63,7 +63,8 @@ type Config struct {
 	RateLimitBurst             int `json:"rate_limit_burst" env:"RATE_LIMIT_BURST" env-default:"20"`
 
 	// API configuration
-	APIBaseURL string `json:"api_base_url" env:"API_BASE_URL" env-required:"true"`
+	APIBaseURL   string `json:"api_base_url" env:"API_BASE_URL" env-required:"true"`
+	DefaultModel string `json:"default_model" env:"DEFAULT_MODEL" env-default:"qwen3-coder-plus"`
 
 	// Security
 	TrustedProxies []string `json:"trusted_proxies" env:"TRUSTED_PROXIES" env-separator:","`

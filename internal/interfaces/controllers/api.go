@@ -13,9 +13,6 @@ import (
 
 // Constants for API responses and error handling
 const (
-	// DefaultModel Default model for completions
-	DefaultModel = "qwen3-coder-plus"
-
 	// ObjectList OpenAI-compatible object types
 	ObjectList           = "list"
 	ObjectTextCompletion = "text_completion"
@@ -254,7 +251,7 @@ func (ctrl *APIController) OpenAICompletionsHandler(w http.ResponseWriter, r *ht
 // buildChatRequestFromCompletion converts completion request to chat completion format
 func (ctrl *APIController) buildChatRequestFromCompletion(body map[string]interface{}, prompt string, stream bool) *entities.ChatCompletionRequest {
 	chatReq := &entities.ChatCompletionRequest{
-		Model: DefaultModel,
+		// Model left empty to let usecase handle default
 		Messages: []entities.ChatMessage{
 			{Role: "user", Content: prompt},
 		},

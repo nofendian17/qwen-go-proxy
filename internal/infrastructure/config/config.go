@@ -35,6 +35,7 @@ func LoadConfig() (*entities.Config, error) {
 		RateLimitRequestsPerSecond: getEnvIntWithDefault("RATE_LIMIT_RPS", 10),
 		RateLimitBurst:             getEnvIntWithDefault("RATE_LIMIT_BURST", 20),
 		APIBaseURL:                 getEnvWithDefault("API_BASE_URL", "https://portal.qwen.ai/v1"),
+		DefaultModel:               getEnvWithDefault("DEFAULT_MODEL", "qwen3-coder-plus"),
 		TrustedProxies:             getEnvSliceWithDefault("TRUSTED_PROXIES", []string{}),
 		EnableTLS:                  getEnvBoolWithDefault("ENABLE_TLS", false),
 		TLSCertFile:                getEnvWithDefault("TLS_CERT_FILE", ""),
