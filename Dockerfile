@@ -1,21 +1,24 @@
-FROM golang:1.24-alpine AS builder
-
-WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
-
-# GoReleaser will copy the pre-built binary, so we don't need to build here
-# This Dockerfile is used by GoReleaser which provides the built binary
+# ===============================================
+# FINAL RUNTIME IMAGE (NO BUILD STAGE REQUIRED)
+# GoReleaser already builds the binary in advance.
+# ===============================================
 
 FROM alpine:latest
 
+# Install minimal dependencies
 RUN apk --no-cache add ca-certificates curl
+
+# Non-root user for security
 RUN addgroup -S qwen && adduser -S qwen -G qwen
 
 WORKDIR /home/qwen
-# GoReleaser copies the pre-built binary here
+
+# GoReleaser will copy the compiled binary into this location
 COPY qwen-go-proxy .
 
-EXPOSE 8080
+# Fix permissions for non-root execution
+RUN chown qwen:qwen /home/qwen/qwen-go-proxy
+
 USER qwen
+
 CMD ["./qwen-go-proxy"]

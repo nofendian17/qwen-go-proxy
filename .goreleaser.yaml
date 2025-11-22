@@ -1,4 +1,4 @@
-version: 2
+version: 1
 
 before:
   hooks:
@@ -6,7 +6,7 @@ before:
     - go generate ./...
 
 # ============================================
-# BINARY BUILDS
+# 1) MULTI-PLATFORM BINARY BUILDS
 # ============================================
 builds:
   - id: qwen-go-proxy
@@ -25,11 +25,14 @@ builds:
       - goos: windows
         goarch: arm64
     ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} 
-        -X main.date={{.Date}} -X main.builtBy=goreleaser
+      - -s -w
+        -X main.version={{.Version}}
+        -X main.commit={{.Commit}}
+        -X main.date={{.Date}}
+        -X main.builtBy=goreleaser
 
 # ============================================
-# ARCHIVES
+# 2) ARCHIVE ARTIFACTS (.tar.gz / .zip)
 # ============================================
 archives:
   - id: archive
@@ -41,55 +44,67 @@ archives:
     files:
       - README.md
 
+# ============================================
+# 3) CHECKSUM (sha256)
+# ============================================
 checksum:
   name_template: "checksums.txt"
   algorithm: sha256
 
+# ============================================
+# 4) CHANGELOG FILTER
+# ============================================
 changelog:
   sort: asc
   filters:
     exclude:
       - "^docs:"
       - "^test:"
+      - "^chore:"
 
+# ============================================
+# 5) GITHUB RELEASE CONFIG
+# ============================================
 release:
-  name_template: "{{.Tag}}"
+  name_template: "{{ .Tag }}"
   github:
     owner: "{{ .Env.GITHUB_REPOSITORY_OWNER }}"
     name: "{{ .Env.GITHUB_REPOSITORY_NAME }}"
 
+# ============================================
+# 6) SNAPSHOT BUILDS
+# ============================================
 snapshot:
   name_template: "{{ .Tag }}-SNAPSHOT-{{ .ShortCommit }}"
 
-metadata:
-  mod_timestamp: "{{ .CommitTimestamp }}"
-
-
 # ============================================
-# 🔥 MULTI-ARCH DOCKER BUILD (BUILDX)
-# ============================================
-# Build a single multi-arch image using docker buildx which will contain both amd64 and arm64
-# architectures in the same image manifest. This avoids creating separate tags for each
-# architecture and ensures docker manifests consistently include both platforms.
-# Uses Buildx --platform to build and push multi-platform images.
+# 7) MULTI-ARCH DOCKER IMAGE (BUILDX)
 # ============================================
 dockers:
   - id: proxy
-    use: build
+    use: buildx           # <- WAJIB untuk multi-arch
+    goos: linux
     builds:
       - qwen-go-proxy
+    dockerfile: Dockerfile
+
+    # Multi-platform docker image
+    build_flag_templates:
+      - "--platform=linux/amd64,linux/arm64"
+
+    push: true
+
+    # Images that will be pushed to GHCR
     image_templates:
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}"
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:latest"
-    dockerfile: Dockerfile
-    build_flag_templates:
-      - "--platform=linux/amd64,linux/arm64"
-    goos: linux
-    # Ensure goreleaser actually pushes the built images to the registry
-    push: true
-    # Optional: show full build logs in CI
-    extra_build_flags:
-      - --progress=plain
 
-# The old docker_manifests block is no longer required when buildx pushes
-# multi-arch images directly, so it has been removed to avoid confusion.
+    # Optional: Make CI output clearer
+    extra_build_flags:
+      - "--progress=plain"
+
+# ============================================
+# 8) METADATA
+# ============================================
+metadata:
+  mod_timestamp: "{{ .CommitTimestamp }}"
