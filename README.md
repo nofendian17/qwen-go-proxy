@@ -409,36 +409,72 @@ docker-compose up --build
 Use the provided Makefile for common development tasks:
 
 ```bash
+# Build targets
 make help                    # Show all available commands
-make build                   # Build binary for current platform
-make build-all              # Build binaries for multiple platforms
-make test                   # Run all tests
-make test-coverage          # Run tests with coverage report
-make lint                   # Run code linting
-make fmt                    # Format Go code
-make clean                  # Clean build artifacts
-make docker-build           # Build Docker image
-make docker-run             # Run Docker container
-make release-dry-run        # Test release process
-make install-goreleaser     # Install GoReleaser
+make build                   # Build Docker image for current platform
+make build-all              # Build multi-platform Docker images and push
+make build-local            # Build multi-platform Docker images locally
+
+# Testing targets
+make test                   # Run all tests with coverage
+make test-docker            # Test Docker image locally
+
+# Docker Compose targets
+make compose-up             # Start services with Docker Compose
+make compose-down           # Stop services with Docker Compose
+make compose-logs           # Show Docker Compose logs
+make compose-pull           # Pull latest images with Docker Compose
+
+# Docker Bake targets
+make bake                   # Build using Docker Bake
+make bake-push              # Build and push using Docker Bake
+
+# Registry targets
+make docker-login           # Log in to GitHub Container Registry
+make push                   # Push Docker image to registry
+make push-latest            # Push latest tag to registry
+make push-all               # Push all platform-specific images
+
+# Release targets
+make release                # Full release process (requires goreleaser and git tag)
+make release-snapshot       # Create snapshot release for testing
+make release-check          # Check release configuration
+
+# Development workflow targets
+make dev-setup              # Set up development environment
+make dev-build              # Build binary locally
+make dev-run                # Run binary locally
+
+# Utility targets
+make clean                  # Clean up Docker resources
+make clean-images           # Remove all qwen-go-proxy images
+make info                   # Show build information
 ```
 
 ### Multi-Platform Docker Support
 
-This project includes comprehensive multi-platform Docker support for building and deploying across different architectures. See [DOCKER.md](DOCKER.md) for detailed documentation.
+This project includes comprehensive multi-platform Docker support for building and deploying across different architectures using GoReleaser, Docker Bake, and Docker Buildx. See [DOCKER.md](DOCKER.md) for detailed documentation.
 
 #### Supported Architectures
 - `linux/amd64` - Standard x86_64 servers and desktops
 - `linux/arm64` - ARM64 servers (AWS Graviton, Apple M1/M2, etc.)
 - `linux/arm/v7` - ARM v7 devices (Raspberry Pi 3/4, etc.)
 
+#### Docker Image Optimization
+
+The Dockerfile has been optimized for GoReleaser builds with:
+- Alpine Linux 3.19 base image for minimal size and security
+- Non-root user (UID/GID 1001) for enhanced security
+- Health check endpoint built-in
+- Minimal dependencies for reduced attack surface
+
 #### Quick Docker Commands
 
 ```bash
-# Build all platforms and push
+# Build and push all platforms (requires registry credentials)
 make build-all
 
-# Build using Docker Bake
+# Build using Docker Bake (parallelized builds)
 make bake
 
 # Build and push using Docker Bake
@@ -447,17 +483,22 @@ make bake-push
 # Test Docker image locally
 make test-docker
 
-# Pull multi-arch image
+# Docker Compose operations
+make compose-up      # Start services
+make compose-down    # Stop services
+make compose-logs    # View logs
+
+# Pull multi-arch image from GitHub Container Registry
 docker pull ghcr.io/nofendian17/qwen-go-proxy:latest
 ```
 
-#### Docker Compose with Flexible Tagging
+#### Docker Compose with Flexible Image Tagging
 
 ```bash
 # Use latest version (default)
 docker-compose up -d
 
-# Use specific version
+# Use specific version tag
 IMAGE_TAG=ghcr.io/nofendian17/qwen-go-proxy:1.0.0 docker-compose up -d
 
 # Use specific architecture
@@ -466,57 +507,57 @@ IMAGE_TAG=ghcr.io/nofendian17/qwen-go-proxy:1.0.0-arm64 docker-compose up -d
 
 ## Releases
 
-This project uses [GoReleaser](https://goreleaser.com/) for automated releases. When a new tag is pushed to the
-repository, GoReleaser automatically:
+This project uses [GoReleaser](https://goreleaser.com/) for fully automated releases with multi-platform support. When a new tag is pushed to the repository, GitHub Actions automatically:
 
+- Runs all tests and quality checks
 - Builds binaries for multiple platforms (Linux, macOS, Windows, FreeBSD, OpenBSD)
 - Creates archives and checksums
-- Generates changelogs
-- Creates GitHub releases
-- Builds and pushes Docker images to GitHub Container Registry
+- Generates Docker images for multiple architectures (amd64, arm64, armv7)
+- Creates multi-arch Docker manifests
+- Generates SBOM (Software Bill of Materials)
+- Creates GitHub releases with all artifacts
 
 ### Creating a Release
 
-1. **Update version in code** (if needed):
-   ```bash
-   # The version is automatically determined from git tags
-   ```
-
-2. **Create and push a tag**:
+1. **Tag the release**:
    ```bash
    git tag v1.0.0
    git push origin v1.0.0
    ```
 
-3. **GitHub Actions will automatically**:
-    - Run tests
+2. **GitHub Actions will automatically**:
+    - Run full test suite
     - Build binaries for all platforms
-    - Create GitHub release with assets
-    - Push Docker images
+    - Build and push multi-arch Docker images
+    - Create GitHub release with release notes
+    - Generate SBOM for security compliance
 
-### Manual Release (Development)
+### Testing Release Process Locally
 
-For testing the release process locally:
+For development and testing:
 
 ```bash
-# Install GoReleaser
-make install-goreleaser
-
-# Test release process without publishing
-make release-dry-run
-
-# Check release configuration
+# Check GoReleaser configuration
 make release-check
+
+# Create snapshot release without publishing
+make release-snapshot
+
+# Full release (requires proper git tag and credentials)
+make release
 ```
 
 ### Release Artifacts
 
 Each release includes:
 
-- Binaries for multiple platforms and architectures
-- SHA256 checksums for verification
-- Docker images tagged with version and `latest`
-- Generated changelog
+- Binaries for Linux, macOS, Windows, FreeBSD, and OpenBSD
+- SHA256 checksums for integrity verification
+- Compressed archives (tar.gz, zip)
+- Docker images for amd64, arm64, and armv7 architectures
+- Multi-arch manifest for seamless cross-platform deployment
+- SBOM for dependency tracking and security analysis
+- Automated changelog with commit history
 
 ## Troubleshooting
 
