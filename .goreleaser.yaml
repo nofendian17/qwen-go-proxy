@@ -62,7 +62,7 @@ dockers:
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
-      - "--platform=linux/amd64"
+      - "--platform=linux/amd64,linux/arm64"
     extra_files:
       - go.mod
       - go.sum
