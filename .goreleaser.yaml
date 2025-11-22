@@ -1,4 +1,5 @@
 version: 1
+project_name: qwen-go-proxy
 
 before:
   hooks:
@@ -54,8 +55,8 @@ changelog:
 release:
   name_template: "{{.Tag}}"
   github:
-    owner: "{{ .Env.GITHUB_REPOSITORY_OWNER }}"
-    name: "{{ .Env.GITHUB_REPOSITORY_NAME }}"
+    owner: "{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}"
+    name: "{{ .Env.GITHUB_REPOSITORY_NAME | or \"qwen-go\" }}"
 
 snapshot:
   name_template: "{{ .Tag }}-SNAPSHOT-{{ .ShortCommit }}"
@@ -64,34 +65,102 @@ metadata:
   mod_timestamp: "{{ .CommitTimestamp }}"
 
 # ============================================
-# MULTI-ARCH DOCKER BUILDS (GoReleaser v1.x)
+# MULTI-PLATFORM DOCKER BUILDS (GoReleaser v1.x)
 # ============================================
 dockers:
+  # AMD64 Linux build
   - id: proxy-amd64
     goos: linux
     goarch: amd64
     image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:v{{ .Major }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:v{{ .Major }}.{{ .Minor }}-amd64"
     dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.Commit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source={{.GitURL}}"
+      - "--label=org.opencontainers.image.licenses=MIT"
+      - "--pull"
+      - "--push"
 
+  # ARM64 Linux build
   - id: proxy-arm64
     goos: linux
     goarch: arm64
     image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-arm64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-arm64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:v{{ .Major }}-arm64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:v{{ .Major }}.{{ .Minor }}-arm64"
     dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.Commit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source={{.GitURL}}"
+      - "--label=org.opencontainers.image.licenses=MIT"
+      - "--pull"
+      - "--push"
+
+  # ARM v7 Linux build (for Raspberry Pi and other ARM devices)
+  - id: proxy-armv7
+    goos: linux
+    goarch: arm
+    goarm: 7
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-armv7"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:v{{ .Major }}-armv7"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:v{{ .Major }}.{{ .Minor }}-armv7"
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm/v7"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.Commit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source={{.GitURL}}"
+      - "--label=org.opencontainers.image.licenses=MIT"
+      - "--pull"
+      - "--push"
 
 # ============================================
-# MERGE DOCKER IMAGES INTO MULTI-ARCH MANIFEST
+# MERGE DOCKER IMAGES INTO MULTI-ARCH MANIFESTS
 # ============================================
 docker_manifests:
-  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}"
+  # Versioned manifest
+  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}"
     image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-arm64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-arm64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-armv7"
 
-  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:latest"
+  # Major version manifest
+  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:v{{ .Major }}"
     image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-arm64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-arm64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-armv7"
+
+  # Minor version manifest
+  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:v{{ .Major }}.{{ .Minor }}"
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-arm64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-armv7"
+
+  # Latest manifest
+  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:latest"
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-arm64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER | or \"nofendian17\" }}/{{ .ProjectName }}:{{ .Version }}-armv7"
 

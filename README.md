@@ -423,6 +423,47 @@ make release-dry-run        # Test release process
 make install-goreleaser     # Install GoReleaser
 ```
 
+### Multi-Platform Docker Support
+
+This project includes comprehensive multi-platform Docker support for building and deploying across different architectures. See [DOCKER.md](DOCKER.md) for detailed documentation.
+
+#### Supported Architectures
+- `linux/amd64` - Standard x86_64 servers and desktops
+- `linux/arm64` - ARM64 servers (AWS Graviton, Apple M1/M2, etc.)
+- `linux/arm/v7` - ARM v7 devices (Raspberry Pi 3/4, etc.)
+
+#### Quick Docker Commands
+
+```bash
+# Build all platforms and push
+make build-all
+
+# Build using Docker Bake
+make bake
+
+# Build and push using Docker Bake
+make bake-push
+
+# Test Docker image locally
+make test-docker
+
+# Pull multi-arch image
+docker pull ghcr.io/nofendian17/qwen-go-proxy:latest
+```
+
+#### Docker Compose with Flexible Tagging
+
+```bash
+# Use latest version (default)
+docker-compose up -d
+
+# Use specific version
+IMAGE_TAG=ghcr.io/nofendian17/qwen-go-proxy:1.0.0 docker-compose up -d
+
+# Use specific architecture
+IMAGE_TAG=ghcr.io/nofendian17/qwen-go-proxy:1.0.0-arm64 docker-compose up -d
+```
+
 ## Releases
 
 This project uses [GoReleaser](https://goreleaser.com/) for automated releases. When a new tag is pushed to the

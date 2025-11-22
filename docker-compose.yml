@@ -1,41 +1,44 @@
 # =================================================================
 # Qwen API Proxy - Docker Compose Configuration
 # =================================================================
-# This configuration provides a production-ready setup for the Qwen API proxy
-# that offers OpenAI-compatible endpoints with OAuth authentication.
+# Production-ready configuration for running the Qwen API Proxy
+# that provides OpenAI-compatible endpoints with OAuth authentication.
+# This version works for both amd64 and arm64 hosts automatically,
+# as long as the GHCR image is multi-architecture.
+# =================================================================
 
 services:
   qwen-api-proxy:
-    image: ghcr.io/nofendian17/qwen-go-proxy:latest
+    # Use environment variable for image tag, fallback to latest
+    image: ${IMAGE_TAG:-ghcr.io/nofendian17/qwen-go-proxy:latest}
 
-    # Port configuration
+    # Port Exposure
     ports:
       - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
 
-    # User configuration for proper file permissions
+    # Correct file permission handling when mounting host directories
     user: "${UID:-1000}:${GID:-1000}"
 
-    # Load environment variables from .env file
+    # Environment variables loaded from .env
     env_file:
       - .env
 
-    # Named volume for .qwen credentials (mounted to working directory)
+    # Persist Qwen API credentials inside container's home directory
     volumes:
       - .qwen:/home/qwen/.qwen
 
-    # Restart policy for production resilience
+    # Restart automatically unless manually stopped
     restart: unless-stopped
 
-    # Health check with detailed endpoint
+    # Healthcheck for monitoring container readiness
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:${SERVER_PORT:-8080}/health/detailed" ]
       interval: 30s
       timeout: 15s
       retries: 3
       start_period: 60s
-      disable: false
 
-    # Resource limits (optional - uncomment for production)
+    # Resource limits (optional for production hardening)
     # deploy:
     #   resources:
     #     limits:
@@ -45,10 +48,9 @@ services:
     #       memory: 256M
     #       cpus: '0.25'
 
-    # Logging configuration
+    # Logging (safe rotation)
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-
