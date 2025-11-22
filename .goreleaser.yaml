@@ -57,6 +57,7 @@ dockers:
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .Env.GITHUB_REPOSITORY_NAME }}:{{ .Tag }}"
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .Env.GITHUB_REPOSITORY_NAME }}:latest"
     dockerfile: Dockerfile
+    use_buildx: true
     build_flag_templates:
       - "--label=org.opencontainers.image.created={{.Date}}"
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
