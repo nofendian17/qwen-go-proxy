@@ -1,4 +1,13 @@
-# Build customization
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+# ============================================
+# BINARY BUILDS
+# ============================================
 builds:
   - id: qwen-go-proxy
     main: ./cmd/server
@@ -16,9 +25,12 @@ builds:
       - goos: windows
         goarch: arm64
     ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} 
+        -X main.date={{.Date}} -X main.builtBy=goreleaser
 
-# Archive customization
+# ============================================
+# ARCHIVES
+# ============================================
 archives:
   - id: archive
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
@@ -29,12 +41,10 @@ archives:
     files:
       - README.md
 
-# Checksum customization
 checksum:
   name_template: "checksums.txt"
   algorithm: sha256
 
-# Changelog customization
 changelog:
   sort: asc
   filters:
@@ -42,26 +52,27 @@ changelog:
       - "^docs:"
       - "^test:"
 
-# Release customization
 release:
   name_template: "{{.Tag}}"
   github:
     owner: "{{ .Env.GITHUB_REPOSITORY_OWNER }}"
     name: "{{ .Env.GITHUB_REPOSITORY_NAME }}"
 
-# Snapshot configuration for testing
 snapshot:
   name_template: "{{ .Tag }}-SNAPSHOT-{{ .ShortCommit }}"
 
-# Metadata
 metadata:
   mod_timestamp: "{{ .CommitTimestamp }}"
 
-# ===============================
+
+# ============================================
 # 🔥 MULTI-ARCH DOCKER BUILDS
-# ===============================
+# ============================================
 dockers:
   - id: proxy-amd64
+    use: build
+    builds:
+      - qwen-go-proxy
     image_templates:
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-amd64"
     dockerfile: Dockerfile
@@ -71,6 +82,9 @@ dockers:
     goarch: amd64
 
   - id: proxy-arm64
+    use: build
+    builds:
+      - qwen-go-proxy
     image_templates:
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-arm64"
     dockerfile: Dockerfile
@@ -80,9 +94,9 @@ dockers:
     goarch: arm64
 
 
-# ===============================
-# 🔥 DOCKER MANIFEST (MULTI-ARCH)
-# ===============================
+# ============================================
+# 🔥 MULTI-ARCH MANIFEST
+# ============================================
 docker_manifests:
   - name: "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}"
     image_templates:
