@@ -553,7 +553,7 @@ Each release includes:
 View logs with structured request tracing:
 
 ```bash
-docker-compose logs -f qwen-api-proxy
+docker-compose logs -f qwen-go-proxy
 ```
 
 Or from source:
