@@ -6,9 +6,7 @@
 
 services:
   qwen-api-proxy:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/nofendian17/qwen-go-proxy:latest
 
     # Port configuration
     ports:
