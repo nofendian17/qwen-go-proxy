@@ -134,7 +134,7 @@ jobs:
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag-validation.outputs.version }}
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v${{ steps.tag-validation.outputs.version }}
           format: spdx-json
           output-file: sbom.spdx.json
 
