@@ -81,9 +81,6 @@ dockers:
       - qwen-go-proxy
     goos: linux
     goarch: amd64
-    extra_files:
-      - go.mod
-      - go.sum
     image_templates:
       - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Version }}-amd64"
       - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Major }}-amd64"
@@ -107,9 +104,6 @@ dockers:
       - qwen-go-proxy
     goos: linux
     goarch: arm64
-    extra_files:
-      - go.mod
-      - go.sum
     image_templates:
       - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Version }}-arm64"
       - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Major }}-arm64"
@@ -134,9 +128,6 @@ dockers:
     goos: linux
     goarch: arm
     goarm: 7
-    extra_files:
-      - go.mod
-      - go.sum
     image_templates:
       - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Version }}-armv7"
       - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Major }}-armv7"
