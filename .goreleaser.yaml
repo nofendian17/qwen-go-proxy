@@ -6,7 +6,7 @@ before:
     - go generate ./...
 
 # ============================================
-# 1) MULTI-PLATFORM BINARY BUILDS
+# BUILD BINARIES
 # ============================================
 builds:
   - id: qwen-go-proxy
@@ -25,14 +25,10 @@ builds:
       - goos: windows
         goarch: arm64
     ldflags:
-      - -s -w
-        -X main.version={{.Version}}
-        -X main.commit={{.Commit}}
-        -X main.date={{.Date}}
-        -X main.builtBy=goreleaser
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser
 
 # ============================================
-# 2) ARCHIVE ARTIFACTS (.tar.gz / .zip)
+# ARCHIVES
 # ============================================
 archives:
   - id: archive
@@ -44,67 +40,57 @@ archives:
     files:
       - README.md
 
-# ============================================
-# 3) CHECKSUM (sha256)
-# ============================================
 checksum:
   name_template: "checksums.txt"
   algorithm: sha256
 
-# ============================================
-# 4) CHANGELOG FILTER
-# ============================================
 changelog:
   sort: asc
   filters:
     exclude:
       - "^docs:"
       - "^test:"
-      - "^chore:"
 
-# ============================================
-# 5) GITHUB RELEASE CONFIG
-# ============================================
 release:
-  name_template: "{{ .Tag }}"
+  name_template: "{{.Tag}}"
   github:
     owner: "{{ .Env.GITHUB_REPOSITORY_OWNER }}"
     name: "{{ .Env.GITHUB_REPOSITORY_NAME }}"
 
-# ============================================
-# 6) SNAPSHOT BUILDS
-# ============================================
 snapshot:
   name_template: "{{ .Tag }}-SNAPSHOT-{{ .ShortCommit }}"
 
-# ============================================
-# 7) MULTI-ARCH DOCKER IMAGE (BUILDX)
-# ============================================
-dockers:
-  - id: proxy
-    use: buildx           # <- WAJIB untuk multi-arch
-    goos: linux
-    builds:
-      - qwen-go-proxy
-    dockerfile: Dockerfile
-
-    # Multi-platform docker image
-    build_flag_templates:
-      - "--platform=linux/amd64,linux/arm64"
-
-    push: true
-
-    # Images that will be pushed to GHCR
-    image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:latest"
-
-    # Optional: Make CI output clearer
-    extra_build_flags:
-      - "--progress=plain"
-
-# ============================================
-# 8) METADATA
-# ============================================
 metadata:
   mod_timestamp: "{{ .CommitTimestamp }}"
+
+# ============================================
+# MULTI-ARCH DOCKER BUILDS (GoReleaser v1.x)
+# ============================================
+dockers:
+  - id: proxy-amd64
+    goos: linux
+    goarch: amd64
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-amd64"
+    dockerfile: Dockerfile
+
+  - id: proxy-arm64
+    goos: linux
+    goarch: arm64
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-arm64"
+    dockerfile: Dockerfile
+
+# ============================================
+# MERGE DOCKER IMAGES INTO MULTI-ARCH MANIFEST
+# ============================================
+docker_manifests:
+  - name: "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-arm64"
+
+  - name: "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:latest"
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-arm64"
