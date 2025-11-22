@@ -8,7 +8,7 @@ COPY ./cmd ./cmd
 COPY ./internal ./internal
 ARG TARGETOS
 ARG TARGETARCH
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-w -s" -o qwen-go-proxy ./cmd/server/main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -ldflags="-w -s" -o qwen-go-proxy ./cmd/server/main.go
 
 FROM alpine:latest
 
