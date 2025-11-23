@@ -9,5 +9,8 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./.qwen:/app/.qwen
+      - qwen_data:/app/.qwen
     restart: unless-stopped
+
+volumes:
+  qwen_data:
