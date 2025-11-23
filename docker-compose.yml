@@ -1,14 +1,6 @@
 services:
   qwen-go-proxy:
-    image: qwen-go-proxy:latest
-    pull_policy: never
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        VERSION: ${VERSION:-dev}
-        COMMIT: ${COMMIT:-none}
-        BUILD_DATE: ${BUILD_DATE:-unknown}
+    image: ghcr.io/nofendian17/qwen-go-proxy:latest
     container_name: qwen-go-proxy
     env_file:
       - .env
