@@ -23,6 +23,12 @@ import (
 	"qwen-go-proxy/internal/usecases/streaming"
 )
 
+var (
+	Version   = "dev"
+	Commit    = "none"
+	BuildDate = "unknown"
+)
+
 func main() {
 	startTime := time.Now()
 
