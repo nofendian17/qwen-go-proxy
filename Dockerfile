@@ -49,8 +49,9 @@ COPY --from=builder /app/qwen-go-proxy /usr/local/bin/qwen-go-proxy
 # Copy .env.example
 COPY .env.example .env.example
 
-# Set permissions
-RUN chown -R qwen:qwen /app /usr/local/bin/qwen-go-proxy
+# Create .qwen directory and set permissions
+RUN mkdir -p /app/.qwen && \
+    chown -R qwen:qwen /app /usr/local/bin/qwen-go-proxy /app/.qwen
 
 # Set environment variables
 ENV SERVER_PORT=8080
