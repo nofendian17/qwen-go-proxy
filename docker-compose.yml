@@ -7,7 +7,7 @@ services:
     environment:
       DEPLOY: ${DEPLOY:-}
     ports:
-      - "8080:8080"
+      - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
     volumes:
       - qwen_data:/app/.qwen
     restart: unless-stopped
