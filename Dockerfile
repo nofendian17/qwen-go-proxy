@@ -58,11 +58,11 @@ ENV SERVER_PORT=8080
 ENV SERVER_HOST=0.0.0.0
 
 # Expose default port
-EXPOSE 8080
+EXPOSE ${SERVER_PORT}
 
 # Health check endpoint (Restored from previous version)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+    CMD curl -f http://localhost:${SERVER_PORT}/health || exit 1
 
 # Switch to non-root user
 USER qwen
