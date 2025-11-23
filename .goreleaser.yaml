@@ -1,18 +1,5 @@
-version: 1
-project_name: qwen-go-proxy
-
-before:
-  hooks:
-    - go mod tidy
-    - go generate ./...
-
-# ============================================
-# BUILD BINARIES
-# ============================================
 builds:
-  - id: qwen-go-proxy
-    main: ./cmd/server
-    binary: qwen-go-proxy
+  - id: qwen-go-proxy"
     env:
       - CGO_ENABLED=0
     goos:
@@ -22,158 +9,30 @@ builds:
     goarch:
       - amd64
       - arm64
-      - arm
-    goarm:
-      - 7
-    ignore:
-      - goos: windows
-        goarch: arm64
-      - goos: windows
-        goarch: arm
-      - goos: darwin
-        goarch: arm
+    main: ./cmd/server/
+    binary: qwen-go-proxy
     ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser
-
-# ============================================
-# ARCHIVES
-# ============================================
+      - -s -w -X 'main.Version={{.Version}}' -X 'main.Commit={{.ShortCommit}}' -X 'main.BuildDate={{.Date}}'
 archives:
-  - id: archive
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  - id: "qwen-go-proxy"
     format: tar.gz
     format_overrides:
       - goos: windows
         format: zip
     files:
+      - LICENSE
       - README.md
+      - .env.example
 
 checksum:
-  name_template: "checksums.txt"
-  algorithm: sha256
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
 
 changelog:
   sort: asc
   filters:
     exclude:
-      - "^docs:"
-      - "^test:"
-
-release:
-  name_template: "{{.Tag}}"
-  github:
-    owner: nofendian17
-    name: qwen-go-proxy
-
-snapshot:
-  name_template: "{{ .Tag }}-SNAPSHOT-{{ .ShortCommit }}"
-
-metadata:
-  mod_timestamp: "{{ .CommitTimestamp }}"
-
-# ============================================
-# MULTI-PLATFORM DOCKER BUILDS (GoReleaser v1.x)
-# ============================================
-dockers:
-  # AMD64 Linux build
-  - id: proxy-amd64
-    ids:
-      - qwen-go-proxy
-    goos: linux
-    goarch: amd64
-    image_templates:
-      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Version }}-amd64"
-      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Major }}-amd64"
-      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Major }}.{{ .Minor }}-amd64"
-    dockerfile: Dockerfile
-    use: buildx
-    build_flag_templates:
-      - "--platform=linux/amd64"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.revision={{.Commit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-      - "--label=org.opencontainers.image.source={{.GitURL}}"
-      - "--label=org.opencontainers.image.licenses=MIT"
-      - "--pull"
-      - "--push"
-
-  # ARM64 Linux build
-  - id: proxy-arm64
-    ids:
-      - qwen-go-proxy
-    goos: linux
-    goarch: arm64
-    image_templates:
-      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Version }}-arm64"
-      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Major }}-arm64"
-      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Major }}.{{ .Minor }}-arm64"
-    dockerfile: Dockerfile
-    use: buildx
-    build_flag_templates:
-      - "--platform=linux/arm64"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.revision={{.Commit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-      - "--label=org.opencontainers.image.source={{.GitURL}}"
-      - "--label=org.opencontainers.image.licenses=MIT"
-      - "--pull"
-      - "--push"
-
-  # ARM v7 Linux build (for Raspberry Pi and other ARM devices)
-  - id: proxy-armv7
-    ids:
-      - qwen-go-proxy
-    goos: linux
-    goarch: arm
-    goarm: 7
-    image_templates:
-      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Version }}-armv7"
-      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Major }}-armv7"
-      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Major }}.{{ .Minor }}-armv7"
-    dockerfile: Dockerfile
-    use: buildx
-    build_flag_templates:
-      - "--platform=linux/arm/v7"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.revision={{.Commit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-      - "--label=org.opencontainers.image.source={{.GitURL}}"
-      - "--label=org.opencontainers.image.licenses=MIT"
-      - "--pull"
-      - "--push"
-
-# ============================================
-# MERGE DOCKER IMAGES INTO MULTI-ARCH MANIFESTS
-# ============================================
-docker_manifests:
-  # Versioned manifest
-  - name_template: "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Version }}"
-    image_templates:
-      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Version }}-amd64"
-      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Version }}-arm64"
-      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Version }}-armv7"
-
-  # Major version manifest
-  - name_template: "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Major }}"
-    image_templates:
-      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Version }}-amd64"
-      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Version }}-arm64"
-      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Version }}-armv7"
-
-  # Minor version manifest
-  - name_template: "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Major }}.{{ .Minor }}"
-    image_templates:
-      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Version }}-amd64"
-      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Version }}-arm64"
-      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Version }}-armv7"
-
-  # Latest manifest
-  - name_template: "ghcr.io/nofendian17/{{ .ProjectName }}:latest"
-    image_templates:
-      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Version }}-amd64"
-      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Version }}-arm64"
-      - "ghcr.io/nofendian17/{{ .ProjectName }}:v{{ .Version }}-armv7"
-
+      - '^docs:'
+      - '^test:'

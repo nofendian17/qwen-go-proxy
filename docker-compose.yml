@@ -1,56 +1,21 @@
-# =================================================================
-# Qwen API Proxy - Docker Compose Configuration
-# =================================================================
-# Production-ready configuration for running the Qwen API Proxy
-# that provides OpenAI-compatible endpoints with OAuth authentication.
-# This version works for both amd64 and arm64 hosts automatically,
-# as long as the GHCR image is multi-architecture.
-# =================================================================
-
 services:
   qwen-go-proxy:
-    # Use environment variable for image tag, fallback to latest
-    image: ${IMAGE_TAG:-ghcr.io/nofendian17/qwen-go-proxy:latest}
-
-    # Port Exposure
-    ports:
-      - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
-
-    # Correct file permission handling when mounting host directories
-    user: "${UID:-1000}:${GID:-1000}"
-
-    # Environment variables loaded from .env
+    image: qwen-go-proxy:latest
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+        COMMIT: ${COMMIT:-none}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+    container_name: qwen-go-proxy
     env_file:
       - .env
-
-    # Persist Qwen API credentials inside container's home directory
+    environment:
+      DEPLOY: ${DEPLOY:-}
+    ports:
+      - "8080:8080"
     volumes:
-      - .qwen:/home/qwen/.qwen
-
-    # Restart automatically unless manually stopped
+      - ./auths:/app/.qwen
     restart: unless-stopped
-
-    # Healthcheck for monitoring container readiness
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:${SERVER_PORT:-8080}/health/detailed" ]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 60s
-
-    # Resource limits (optional for production hardening)
-    # deploy:
-    #   resources:
-    #     limits:
-    #       memory: 512M
-    #       cpus: '0.5'
-    #     reservations:
-    #       memory: 256M
-    #       cpus: '0.25'
-
-    # Logging (safe rotation)
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
