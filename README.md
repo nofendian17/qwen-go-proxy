@@ -62,8 +62,14 @@ authentication and AI capabilities.
 
 3. **Start with Docker Compose**:
    ```bash
-   docker-compose up -d
+   # Create necessary directories
+   mkdir -p auths
+   
+   # Start the service
+   docker compose up -d
    ```
+   
+   The credentials will be stored in the `./auths` directory.
 
 ### Option 2: Build from Source
 
@@ -401,7 +407,7 @@ go test -cover ./...
 ### Docker Development
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 ### Development Tools
@@ -411,44 +417,37 @@ Use the provided Makefile for common development tasks:
 ```bash
 # Build targets
 make help                    # Show all available commands
-make build                   # Build Docker image for current platform
-make build-all              # Build multi-platform Docker images and push
-make build-local            # Build multi-platform Docker images locally
+make build                   # Build binary for current platform
+make build-all               # Build binaries for multiple platforms
+make docker-build            # Build Docker image
 
 # Testing targets
-make test                   # Run all tests with coverage
-make test-docker            # Test Docker image locally
+make test                    # Run all tests
+make test-coverage           # Run tests with coverage
+make test-verbose            # Run tests with verbose output
+make lint                    # Run golangci-lint
+make fmt                     # Format Go code
 
 # Docker Compose targets
-make compose-up             # Start services with Docker Compose
-make compose-down           # Stop services with Docker Compose
-make compose-logs           # Show Docker Compose logs
-make compose-pull           # Pull latest images with Docker Compose
-
-# Docker Bake targets
-make bake                   # Build using Docker Bake
-make bake-push              # Build and push using Docker Bake
-
-# Registry targets
-make docker-login           # Log in to GitHub Container Registry
-make push                   # Push Docker image to registry
-make push-latest            # Push latest tag to registry
-make push-all               # Push all platform-specific images
+make docker-setup            # Create necessary directories (auths/)
+make docker-run              # Run Docker container
+make docker-compose-up       # Start with docker-compose
+make docker-compose-down     # Stop docker-compose
 
 # Release targets
-make release                # Full release process (requires goreleaser and git tag)
-make release-snapshot       # Create snapshot release for testing
-make release-check          # Check release configuration
+make release                 # Full release process (requires goreleaser and git tag)
+make release-snapshot        # Create snapshot release for testing
+make release-check           # Check release configuration
+make release-dry-run         # Test release process without publishing
 
 # Development workflow targets
-make dev-setup              # Set up development environment
-make dev-build              # Build binary locally
-make dev-run                # Run binary locally
+make dev-setup               # Set up development environment
+make deps                    # Download dependencies
+make deps-update             # Update dependencies
 
 # Utility targets
-make clean                  # Clean up Docker resources
-make clean-images           # Remove all qwen-go-proxy images
-make info                   # Show build information
+make clean                   # Clean build artifacts
+make version                 # Show current version
 ```
 
 ### Multi-Platform Docker Support
@@ -471,24 +470,15 @@ The Dockerfile has been optimized for GoReleaser builds with:
 #### Quick Docker Commands
 
 ```bash
-# Build and push all platforms (requires registry credentials)
-make build-all
-
-# Build using Docker Bake (parallelized builds)
-make bake
-
-# Build and push using Docker Bake
-make bake-push
-
-# Test Docker image locally
-make test-docker
+# Build Docker image
+make docker-build
 
 # Docker Compose operations
-make compose-up      # Start services
-make compose-down    # Stop services
-make compose-logs    # View logs
+make docker-compose-up    # Start services
+make docker-compose-down  # Stop services
+docker compose logs       # View logs
 
-# Pull multi-arch image from GitHub Container Registry
+# Pull image from GitHub Container Registry
 docker pull ghcr.io/nofendian17/qwen-go-proxy:latest
 ```
 
@@ -496,13 +486,10 @@ docker pull ghcr.io/nofendian17/qwen-go-proxy:latest
 
 ```bash
 # Use latest version (default)
-docker-compose up -d
+docker compose up -d
 
 # Use specific version tag
-IMAGE_TAG=ghcr.io/nofendian17/qwen-go-proxy:1.0.0 docker-compose up -d
-
-# Use specific architecture
-IMAGE_TAG=ghcr.io/nofendian17/qwen-go-proxy:1.0.0-arm64 docker-compose up -d
+IMAGE_TAG=ghcr.io/nofendian17/qwen-go-proxy:1.0.0 docker compose up -d
 ```
 
 ## Releases
