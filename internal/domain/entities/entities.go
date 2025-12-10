@@ -68,9 +68,6 @@ type Config struct {
 
 	// Security
 	TrustedProxies []string `json:"trusted_proxies" env:"TRUSTED_PROXIES" env-separator:","`
-	EnableTLS      bool     `json:"enable_tls" env:"ENABLE_TLS" env-default:"false"`
-	TLSCertFile    string   `json:"tls_cert_file" env:"TLS_CERT_FILE"`
-	TLSKeyFile     string   `json:"tls_key_file" env:"TLS_KEY_FILE"`
 }
 
 // GetServerAddress returns the full server address for HTTP server configuration.
@@ -130,9 +127,9 @@ type ChatCompletionRequest struct {
 // ChatMessage represents a message in chat completion.
 // This entity contains the message structure for chat conversations.
 type ChatMessage struct {
-	Role      string      `json:"role" validate:"required,oneof=system user assistant tool"`
-	Content   any         `json:"content" validate:"required"` // Can be string or []ContentBlock
-	ToolCalls []ToolCall  `json:"tool_calls,omitempty" validate:"omitempty,dive"`
+	Role      string     `json:"role" validate:"required,oneof=system user assistant tool"`
+	Content   any        `json:"content" validate:"required"` // Can be string or []ContentBlock
+	ToolCalls []ToolCall `json:"tool_calls,omitempty" validate:"omitempty,dive"`
 }
 
 // ToolCall represents a tool call in a message.

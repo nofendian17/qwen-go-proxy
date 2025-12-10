@@ -37,9 +37,6 @@ func LoadConfig() (*entities.Config, error) {
 		APIBaseURL:                 getEnvWithDefault("API_BASE_URL", "https://portal.qwen.ai/v1"),
 		DefaultModel:               getEnvWithDefault("DEFAULT_MODEL", "qwen3-coder-plus"),
 		TrustedProxies:             getEnvSliceWithDefault("TRUSTED_PROXIES", []string{}),
-		EnableTLS:                  getEnvBoolWithDefault("ENABLE_TLS", false),
-		TLSCertFile:                getEnvWithDefault("TLS_CERT_FILE", ""),
-		TLSKeyFile:                 getEnvWithDefault("TLS_KEY_FILE", ""),
 	}
 
 	// Validate the configuration using the infrastructure validation

@@ -37,9 +37,6 @@ func TestLoadConfig_DefaultValues(t *testing.T) {
 	assert.Equal(t, 20, config.RateLimitBurst)
 	assert.Equal(t, "https://portal.qwen.ai/v1", config.APIBaseURL)
 	assert.Empty(t, config.TrustedProxies)
-	assert.False(t, config.EnableTLS)
-	assert.Empty(t, config.TLSCertFile)
-	assert.Empty(t, config.TLSKeyFile)
 }
 
 func TestLoadConfig_WithEnvVars(t *testing.T) {
@@ -71,9 +68,6 @@ func TestLoadConfig_WithEnvVars(t *testing.T) {
 		"STREAMING_MIN_CONFIDENCE":       "0.8",
 		"API_BASE_URL":                   "https://custom.api.com/v1",
 		"TRUSTED_PROXIES":                "127.0.0.1,192.168.1.1",
-		"ENABLE_TLS":                     "true",
-		"TLS_CERT_FILE":                  "/path/to/cert.pem",
-		"TLS_KEY_FILE":                   "/path/to/key.pem",
 	}
 
 	for key, value := range envVars {
@@ -102,9 +96,6 @@ func TestLoadConfig_WithEnvVars(t *testing.T) {
 	assert.Equal(t, 40, config.RateLimitBurst)
 	assert.Equal(t, "https://custom.api.com/v1", config.APIBaseURL)
 	assert.Equal(t, []string{"127.0.0.1", "192.168.1.1"}, config.TrustedProxies)
-	assert.True(t, config.EnableTLS)
-	assert.Equal(t, "/path/to/cert.pem", config.TLSCertFile)
-	assert.Equal(t, "/path/to/key.pem", config.TLSKeyFile)
 }
 
 func TestValidateConfig_Valid(t *testing.T) {
@@ -352,7 +343,6 @@ func clearEnvVars() {
 		"TOKEN_REFRESH_BUFFER", "SHUTDOWN_TIMEOUT", "DEBUG_MODE",
 		"LOG_LEVEL", "LOG_FORMAT", "RATE_LIMIT_RPS", "RATE_LIMIT_BURST",
 		"API_BASE_URL", "TRUSTED_PROXIES",
-		"ENABLE_TLS", "TLS_CERT_FILE", "TLS_KEY_FILE",
 		"TEST_VAR", "TEST_INT", "TEST_DURATION", "TEST_BOOL", "TEST_SLICE",
 	}
 

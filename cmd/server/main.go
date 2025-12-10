@@ -78,7 +78,6 @@ func main() {
 			w.Header().Set("X-Content-Type-Options", "nosniff")
 			w.Header().Set("X-Frame-Options", "DENY")
 			w.Header().Set("X-XSS-Protection", "1; mode=block")
-			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
 			next.ServeHTTP(w, r)
 		})
 	})
@@ -161,27 +160,10 @@ func main() {
 		WriteTimeout: cfg.WriteTimeout,
 	}
 
-	// Configure TLS if enabled
-	if cfg.EnableTLS {
-		if cfg.TLSCertFile == "" || cfg.TLSKeyFile == "" {
-			log.Fatalf("TLS enabled but certificate files not configured")
-		}
-
-		logger.Info("TLS enabled", "cert_file", cfg.TLSCertFile, "key_file", cfg.TLSKeyFile)
-
-		// In production, you might want to add more TLS configuration here
-		// such as MinVersion, CipherSuites, etc.
-	}
-
 	// Start server in a goroutine
 	go func() {
 		logger.Info("Starting HTTP server", "address", cfg.GetServerAddress())
-		var err error
-		if cfg.EnableTLS {
-			err = srv.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile)
-		} else {
-			err = srv.ListenAndServe()
-		}
+		err := srv.ListenAndServe()
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("HTTP server failed", "error", err)
 			// Don't use log.Fatalf here as it would prevent graceful shutdown
